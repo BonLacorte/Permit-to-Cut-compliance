@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { logoutAction } from "@/app/actions";
+import { ChangePasswordButton } from "@/components/change-password-button";
+import { SubmitButton } from "@/components/submit-button";
 import { requireUser } from "@/lib/auth";
 
 const nav = [
@@ -9,8 +11,7 @@ const nav = [
   ["Document Summary", "/reports/document-summary"],
   ["Application Summary", "/reports/application-summary"],
   ["Completion Summary", "/reports/completion-summary"],
-  ["Document Combinations", "/reports/document-combinations"],
-  ["Notes", "/notes"]
+  ["Document Combinations", "/reports/document-combinations"]
 ];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -19,7 +20,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brand">Permit-to-Cut Compliance</div>
+        <div className="sidebar-user">
+          <strong>{user.name}</strong>
+          <span>{user.role.toLowerCase()}</span>
+          <div className="sidebar-account-actions">
+            <ChangePasswordButton />
+          </div>
+        </div>
         <nav className="nav">
           {nav.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}
           {user.role === "ADMIN" ? (
@@ -29,19 +36,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </>
           ) : null}
           <form action={logoutAction}>
-            <button type="submit">Sign out</button>
+            <SubmitButton className="nav-submit" pendingText="Signing out...">Sign out</SubmitButton>
           </form>
         </nav>
       </aside>
-      <main className="main">
-        <div className="topbar">
-          <div>
-            <strong>{user.name}</strong>
-            <div className="muted">{user.role.toLowerCase()}</div>
-          </div>
-        </div>
-        {children}
-      </main>
+      <main className="main">{children}</main>
     </div>
   );
 }

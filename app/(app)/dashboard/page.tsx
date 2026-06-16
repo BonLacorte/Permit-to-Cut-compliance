@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ExportExcelButton } from "@/components/export-excel-button";
 import { getReportData } from "@/lib/data";
 
 export default async function DashboardPage() {
@@ -45,8 +46,7 @@ export default async function DashboardPage() {
           <h2>Quick Actions</h2>
           <div className="actions">
             <Link className="button" href="/applications/new">New Application</Link>
-            <Link className="button secondary" href="/reports/missing-documents">Review Missing Documents</Link>
-            <Link className="button secondary" href="/api/export">Export Excel</Link>
+            <ExportExcelButton />
           </div>
         </div>
       </section>

@@ -78,7 +78,7 @@ export function ReportTable<Row extends Record<string, CellValue>>({
                 <th key={column.key}>
                   {column.sortable ? (
                     <button className="th-button" type="button" onClick={() => sortBy(column)}>
-                      {column.label}{sort?.key === column.key ? (sort.direction === "asc" ? " ?" : " ?") : ""}
+                      {column.label}{sort?.key === column.key ? (sort.direction === "asc" ? " asc" : " desc") : ""}
                     </button>
                   ) : column.label}
                 </th>

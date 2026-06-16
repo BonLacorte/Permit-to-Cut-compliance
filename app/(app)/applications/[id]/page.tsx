@@ -1,6 +1,5 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { appendProgressAction } from "@/app/actions";
-import { DocumentPicker } from "@/components/document-picker";
 import { EditApplicationButton } from "@/components/edit-application-button";
 import { StatusBadge } from "@/components/status-badge";
 import { getApplicationTypesWithDocuments, getReportData } from "@/lib/data";
@@ -37,9 +36,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
     <div className="grid">
       <div className="topbar">
         <div>
-          <h1>{record.applicantName}</h1>
-          <p className="muted">{record.applicationType.name}</p>
-          {record.remarks ? <p>{record.remarks}</p> : null}
+          <Link className="button secondary" href="/applications">Back to Applications</Link>
         </div>
         <EditApplicationButton
           record={{
@@ -47,10 +44,17 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
             applicantName: record.applicantName,
             applicationTypeId: record.applicationTypeId,
             remarks: record.remarks || "",
-            selectedDocumentIds: existingDocumentIds
+            selectedDocumentIds: existingDocumentIds,
+            returnTo: `/applications/${record.id}`
           }}
           applicationTypes={applicationTypeOptions}
         />
+      </div>
+
+      <div>
+        <h1>{record.applicantName}</h1>
+        <p className="muted">{record.applicationType.name}</p>
+        {record.remarks ? <p>{record.remarks}</p> : null}
       </div>
 
       <section className="grid cols-4">
@@ -58,23 +62,6 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
         <div className="card stat"><span>Submitted</span><strong>{audit.submittedCount}</strong></div>
         <div className="card stat"><span>Missing</span><strong>{audit.missingCount}</strong></div>
         <div className="card stat"><span>Status</span><strong><StatusBadge status={audit.status} /></strong></div>
-      </section>
-
-      <section className="panel">
-        <h2>Append Progress</h2>
-        <form action={appendProgressAction} className="form">
-          <input type="hidden" name="applicationRecordId" value={record.id} />
-          <DocumentPicker
-            applicationTypes={applicationTypes}
-            selectedApplicationTypeId={record.applicationTypeId}
-            existingDocumentIds={existingDocumentIds}
-          />
-          <div className="field">
-            <label htmlFor="remarks">Progress remarks</label>
-            <textarea id="remarks" name="remarks" rows={4} />
-          </div>
-          <button className="button" type="submit">Save Progress</button>
-        </form>
       </section>
 
       <section className="grid cols-2">
@@ -98,17 +85,16 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
         <h2>Progress History</h2>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Date</th><th>User</th><th>Documents</th><th>Remarks</th></tr></thead>
+            <thead><tr><th>User</th><th>Documents</th><th>Remarks</th></tr></thead>
             <tbody>
               {record.progressEntries.map((entry) => (
                 <tr key={entry.id}>
-                  <td>{entry.createdAt.toLocaleString()}</td>
                   <td>{entry.user.name}</td>
                   <td>{entry.documents.map((doc) => doc.requiredDocument.name).join(", ") || "No document changes"}</td>
                   <td>{entry.remarks || ""}</td>
                 </tr>
               ))}
-              {record.progressEntries.length === 0 ? <tr><td colSpan={4}>No progress entries yet.</td></tr> : null}
+              {record.progressEntries.length === 0 ? <tr><td colSpan={3}>No progress entries yet.</td></tr> : null}
             </tbody>
           </table>
         </div>

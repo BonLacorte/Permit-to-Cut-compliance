@@ -55,24 +55,30 @@ export function EditSubmittedFiles({
         <span className="muted">Changing this resets the submitted files to the checked items below.</span>
       </div>
 
-      <div className="field">
-        <label>Submitted Files</label>
-        <div className="checklist">
-          {!currentType ? <div className="muted">Choose an application type first.</div> : null}
-          {currentType?.documents.map((document) => (
-            <label key={document.id} className="check">
-              <input
-                type="checkbox"
-                name="documentIds"
-                value={document.id}
-                checked={selectedDocumentIds.includes(document.id)}
-                onChange={() => toggleDocument(document.id)}
-              />
-              <span>{document.name}</span>
-            </label>
-          ))}
+      <div className="field submitted-files-field">
+        <div className="field-heading-row">
+          <label>Submitted Files</label>
+          <span className="selected-count">{selectedDocumentIds.length} selected</span>
+        </div>
+        <div className="submitted-files-box">
+          {!currentType ? <div className="empty-state">Choose an application type first.</div> : null}
+          {currentType?.documents.map((document) => {
+            const checked = selectedDocumentIds.includes(document.id);
+            return (
+              <label key={document.id} className={`submitted-file-option ${checked ? "selected" : ""}`}>
+                <input
+                  type="checkbox"
+                  name="documentIds"
+                  value={document.id}
+                  checked={checked}
+                  onChange={() => toggleDocument(document.id)}
+                />
+                <span>{document.name}</span>
+              </label>
+            );
+          })}
           {currentType && currentType.documents.length === 0 ? (
-            <div className="muted">No required documents are configured for this application type.</div>
+            <div className="empty-state">No required documents are configured for this application type.</div>
           ) : null}
         </div>
         <span className="muted">Saving replaces the submitted files for this record with exactly the checked files.</span>

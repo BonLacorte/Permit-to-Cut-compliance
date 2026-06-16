@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { updateApplicationRecordAction } from "@/app/actions";
 import { EditSubmittedFiles, type ApplicationTypeOption } from "@/components/edit-submitted-files";
+import { SubmitButton } from "@/components/submit-button";
 
 type RecordDetails = {
   id: string;
@@ -10,6 +11,7 @@ type RecordDetails = {
   applicationTypeId: string;
   remarks: string;
   selectedDocumentIds: string[];
+  returnTo: string;
 };
 
 export function EditApplicationButton({ record, applicationTypes }: { record: RecordDetails; applicationTypes: ApplicationTypeOption[] }) {
@@ -24,6 +26,7 @@ export function EditApplicationButton({ record, applicationTypes }: { record: Re
             <h2>Edit Application</h2>
             <form action={updateApplicationRecordAction} className="form" onSubmit={() => setOpen(false)}>
               <input type="hidden" name="id" value={record.id} />
+              <input type="hidden" name="returnTo" value={record.returnTo} />
               <div className="field">
                 <label>Name</label>
                 <input name="applicantName" defaultValue={record.applicantName} required />
@@ -38,7 +41,7 @@ export function EditApplicationButton({ record, applicationTypes }: { record: Re
                 <textarea name="remarks" defaultValue={record.remarks} rows={4} />
               </div>
               <div className="actions">
-                <button className="button" type="submit">Save Changes</button>
+                <SubmitButton pendingText="Saving changes...">Save Changes</SubmitButton>
                 <button className="button secondary" type="button" onClick={() => setOpen(false)}>Cancel</button>
               </div>
             </form>

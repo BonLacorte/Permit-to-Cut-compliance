@@ -6,6 +6,7 @@ import { deleteApplicationRecordAction, updateApplicationRecordAction } from "@/
 import { BulletList } from "@/components/bullet-list";
 import { EditSubmittedFiles, type ApplicationTypeOption } from "@/components/edit-submitted-files";
 import { StatusBadge } from "@/components/status-badge";
+import { SubmitButton } from "@/components/submit-button";
 
 type Row = {
   id: string;
@@ -114,6 +115,7 @@ export function ApplicationsTable({ rows, applicationTypes }: { rows: Row[]; app
                 <td>{row.createdByName}</td>
                 <td>
                   <div className="actions compact-actions">
+                    <Link className="button secondary" href={`/applications/${row.id}`}>View</Link>
                     <button className="button secondary" type="button" onClick={() => setEditing(row)}>Edit</button>
                     <button className="button danger" type="button" onClick={() => setDeleting(row)}>Delete</button>
                   </div>
@@ -140,6 +142,7 @@ export function ApplicationsTable({ rows, applicationTypes }: { rows: Row[]; app
             <h2>Edit Application</h2>
             <form action={updateApplicationRecordAction} className="form" onSubmit={() => setEditing(null)}>
               <input type="hidden" name="id" value={editing.id} />
+              <input type="hidden" name="returnTo" value="/applications" />
               <div className="field">
                 <label>Name</label>
                 <input name="applicantName" defaultValue={editing.applicantName} required />
@@ -155,7 +158,7 @@ export function ApplicationsTable({ rows, applicationTypes }: { rows: Row[]; app
                 <textarea name="remarks" defaultValue={editing.remarks} rows={4} />
               </div>
               <div className="actions">
-                <button className="button" type="submit">Save Changes</button>
+                <SubmitButton pendingText="Saving changes...">Save Changes</SubmitButton>
                 <button className="button secondary" type="button" onClick={() => setEditing(null)}>Cancel</button>
               </div>
             </form>
@@ -165,12 +168,12 @@ export function ApplicationsTable({ rows, applicationTypes }: { rows: Row[]; app
 
       {deleting ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
-          <div className="modal">
+          <div className="modal compact-modal">
             <h2>Delete Application</h2>
             <p>Delete <strong>{deleting.applicantName}</strong>? This removes the record and all saved progress.</p>
             <form action={deleteApplicationRecordAction} className="actions" onSubmit={() => setDeleting(null)}>
               <input type="hidden" name="id" value={deleting.id} />
-              <button className="button danger" type="submit">Delete</button>
+              <SubmitButton className="button danger" pendingText="Deleting...">Delete</SubmitButton>
               <button className="button secondary" type="button" onClick={() => setDeleting(null)}>Cancel</button>
             </form>
           </div>

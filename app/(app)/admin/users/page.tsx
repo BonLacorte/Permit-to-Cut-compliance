@@ -1,9 +1,11 @@
 import { createUserAction } from "@/app/actions";
+import { SubmitButton } from "@/components/submit-button";
+import { UsersTable } from "@/components/users-table";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export default async function UsersPage() {
-  await requireAdmin();
+  const currentUser = await requireAdmin();
   const users = await prisma.user.findMany({ orderBy: { createdAt: "asc" } });
 
   return (
@@ -26,24 +28,19 @@ export default async function UsersPage() {
               </select>
             </div>
           </div>
-          <button className="button" type="submit">Create User</button>
+          <SubmitButton pendingText="Creating user...">Create User</SubmitButton>
         </form>
       </section>
-      <section className="panel table-wrap">
-        <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th></tr></thead>
-          <tbody>
-            {users.map((user) => (
-              <tr key={user.id}>
-                <td>{user.name}</td>
-                <td>{user.email}</td>
-                <td>{user.role}</td>
-                <td>{user.createdAt.toLocaleDateString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+      <UsersTable
+        currentUserId={currentUser.id}
+        users={users.map((user) => ({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          createdAt: user.createdAt.toLocaleDateString()
+        }))}
+      />
     </div>
   );
 }
