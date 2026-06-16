@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+model User {
+  id           String              @id @default(cuid())
+  name         String
+  email        String              @unique
+  passwordHash String
+  role         Role                @default(STAFF)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  records      ApplicationRecord[] @relation("CreatedRecords")
+  progress     ProgressEntry[]
+  activity     ActivityLog[]
+
+  @@map("users")
+}
+
+model ApplicationType {
+  id        String               @id @default(cuid())
+  name      String               @unique
+  active    Boolean              @default(true)
+  sortOrder Int                  @default(0)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  documents RequiredDocument[]
+  records   ApplicationRecord[]
+
+  @@map("application_types")
+}
+
+model RequiredDocument {
+  id                String          @id @default(cuid())
+  applicationTypeId String
+  name              String
+  active            Boolean         @default(true)
+  sortOrder         Int             @default(0)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  applicationType   ApplicationType @relation(fields: [applicationTypeId], references: [id], onDelete: Cascade)
+  progressDocuments ProgressDocument[]
+
+  @@unique([applicationTypeId, name])
+  @@map("required_documents")
+}
+
+model ApplicationRecord {
+  id                String             @id @default(cuid())
+  applicantName     String
+  applicationTypeId String
+  remarks           String?
+  createdById       String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  applicationType   ApplicationType    @relation(fields: [applicationTypeId], references: [id])
+  createdBy         User               @relation("CreatedRecords", fields: [createdById], references: [id])
+  progressEntries   ProgressEntry[]
+  progressDocuments ProgressDocument[]
+
+  @@index([applicationTypeId])
+  @@map("application_records")
+}
+
+model ProgressEntry {
+  id                  String             @id @default(cuid())
+  applicationRecordId String
+  userId              String
+  remarks             String?
+  createdAt           DateTime           @default(now())
+  applicationRecord   ApplicationRecord  @relation(fields: [applicationRecordId], references: [id], onDelete: Cascade)
+  user                User               @relation(fields: [userId], references: [id])
+  documents           ProgressDocument[]
+
+  @@index([applicationRecordId])
+  @@index([userId])
+  @@map("progress_entries")
+}
+
+model ProgressDocument {
+  id                  String            @id @default(cuid())
+  progressEntryId     String
+  applicationRecordId String
+  requiredDocumentId  String
+  createdAt           DateTime          @default(now())
+  progressEntry       ProgressEntry     @relation(fields: [progressEntryId], references: [id], onDelete: Cascade)
+  applicationRecord   ApplicationRecord @relation(fields: [applicationRecordId], references: [id], onDelete: Cascade)
+  requiredDocument    RequiredDocument  @relation(fields: [requiredDocumentId], references: [id])
+
+  @@unique([applicationRecordId, requiredDocumentId])
+  @@index([requiredDocumentId])
+  @@map("progress_documents")
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  targetType String
+  targetId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@index([action])
+  @@index([targetType, targetId])
+  @@map("activity_log")
+}
