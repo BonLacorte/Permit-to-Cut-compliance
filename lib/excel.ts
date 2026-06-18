@@ -1,5 +1,18 @@
 import * as XLSX from "xlsx";
-import { applicationSummary, completionSummary, documentCombinations, documentSummary, type RecordAudit, type RequiredDocumentRef } from "@/lib/reporting";
+import { applicationSummary, completionSummary, documentCombinations, documentSummary, applicationExportRows, type RecordAudit, type RequiredDocumentRef } from "@/lib/reporting";
+
+export type ParsedPtcRecord = {
+  regionalOffice?: string;
+  provincialOffice?: string;
+  ptcNumber?: string;
+  dateIssued?: Date;
+  applicantName?: string;
+  barangay?: string;
+  municipality?: string;
+  treesApplied?: number;
+  treesApproved?: number;
+  seedlingsReplacement?: number;
+};
 
 export function parseGroundsWorkbook(buffer: Buffer) {
   const workbook = XLSX.read(buffer, { type: "buffer" });
@@ -23,6 +36,48 @@ export function parseGroundsWorkbook(buffer: Buffer) {
   }));
 }
 
+function cellText(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function parseNumberCell(value: unknown) {
+  if (value === null || value === undefined || value === "") return undefined;
+  const parsed = Number(String(value).replace(/,/g, "").trim());
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : undefined;
+}
+
+function parseDateCell(value: unknown) {
+  if (value === null || value === undefined || value === "") return undefined;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === "number") {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (!parsed) return undefined;
+    return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d));
+  }
+  const text = String(value).trim();
+  if (!text) return undefined;
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+export function parsePtcRecordsWorkbook(buffer: Buffer): ParsedPtcRecord[] {
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: true });
+  return rows.slice(1).map((row) => ({
+    regionalOffice: cellText(row[0]) || undefined,
+    provincialOffice: cellText(row[1]) || undefined,
+    ptcNumber: cellText(row[2]) || undefined,
+    dateIssued: parseDateCell(row[3]),
+    applicantName: cellText(row[4]) || undefined,
+    barangay: cellText(row[5]) || undefined,
+    municipality: cellText(row[6]) || undefined,
+    treesApplied: parseNumberCell(row[7]),
+    treesApproved: parseNumberCell(row[8]),
+    seedlingsReplacement: parseNumberCell(row[9])
+  }));
+}
+
 export function buildReportWorkbook(audits: RecordAudit[], requiredDocuments: RequiredDocumentRef[]) {
   const workbook = XLSX.utils.book_new();
   const completion = completionSummary(audits);
@@ -41,21 +96,7 @@ export function buildReportWorkbook(audits: RecordAudit[], requiredDocuments: Re
     "Dashboard"
   );
 
-  XLSX.utils.book_append_sheet(
-    workbook,
-    XLSX.utils.json_to_sheet(
-      audits.map((audit) => ({
-        Name: audit.applicantName,
-        "Type of application": audit.applicationTypeName,
-        "Selected Documents": audit.selectedDocuments.map((doc) => doc.name).join(", "),
-        "Missing Count": audit.missingCount,
-        "Missing Documents": audit.missingDocuments.map((doc) => doc.name).join(", "),
-        Status: audit.status
-      }))
-    ),
-    "Applications"
-  );
-
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(applicationExportRows(audits)), "Applications");
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(docSummary), "Document Summary");
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(appSummary), "Application Summary");
   XLSX.utils.book_append_sheet(

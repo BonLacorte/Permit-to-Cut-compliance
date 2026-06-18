@@ -1,5 +1,6 @@
 import { createRecordAction } from "@/app/actions";
 import { DocumentPicker } from "@/components/document-picker";
+import { PtcRecordFields } from "@/components/ptc-record-fields";
 import { SubmitButton } from "@/components/submit-button";
 import { getApplicationTypesWithDocuments } from "@/lib/data";
 
@@ -9,15 +10,16 @@ export default async function NewApplicationPage() {
   return (
     <div className="grid">
       <div>
-        <h1>New Application</h1>
-        <p className="muted">Create an application record and select the submitted documents in one step.</p>
+        <h1>New PTC Application</h1>
+        <p className="muted">Create a blank or incomplete PTC record now, then edit the details later.</p>
       </div>
       <section className="panel">
         <form action={createRecordAction} className="form">
           <div className="field">
-            <label htmlFor="applicantName">Name</label>
-            <input id="applicantName" name="applicantName" required />
+            <label htmlFor="applicantName">Name of Applicant</label>
+            <input id="applicantName" name="applicantName" />
           </div>
+          <PtcRecordFields />
           <DocumentPicker applicationTypes={applicationTypes} />
           <div className="field">
             <label htmlFor="remarks">Remarks</label>

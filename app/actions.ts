@@ -6,20 +6,21 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { clearSession, requireAdmin, requireUser, setSession } from "@/lib/auth";
 import { hashPassword, verifyPassword } from "@/lib/password";
-import { parseGroundsWorkbook } from "@/lib/excel";
+import { parseGroundsWorkbook, parsePtcRecordsWorkbook } from "@/lib/excel";
+import { PERMIT_GROUP_PTC } from "@/lib/ptc";
 import { prisma } from "@/lib/prisma";
 
 const createRecordSchema = z.object({
-  applicantName: z.string().trim().min(1),
-  applicationTypeId: z.string().min(1),
+  applicantName: z.string().trim().optional(),
+  applicationTypeId: z.string().trim().optional(),
   remarks: z.string().trim().optional(),
   documentIds: z.array(z.string()).default([])
 });
 
 const updateRecordSchema = z.object({
   id: z.string().min(1),
-  applicantName: z.string().trim().min(1),
-  applicationTypeId: z.string().min(1),
+  applicantName: z.string().trim().optional(),
+  applicationTypeId: z.string().trim().optional(),
   remarks: z.string().trim().optional(),
   documentIds: z.array(z.string()).default([]),
   returnTo: z.string().optional()
@@ -37,6 +38,43 @@ const passwordSchema = z.object({
   confirmPassword: z.string().min(6),
   returnTo: z.string().optional()
 });
+
+function optionalString(value: FormDataEntryValue | null) {
+  const text = String(value || "").trim();
+  return text || undefined;
+}
+
+function nullableString(value: FormDataEntryValue | null) {
+  return optionalString(value) || null;
+}
+
+function nullableInt(value: FormDataEntryValue | null) {
+  const text = String(value || "").replace(/,/g, "").trim();
+  if (!text) return null;
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+}
+
+function nullableDate(value: FormDataEntryValue | null) {
+  const text = optionalString(value);
+  if (!text) return null;
+  const date = new Date(`${text}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function ptcRecordData(formData: FormData) {
+  return {
+    ptcNumber: nullableString(formData.get("ptcNumber")),
+    dateIssued: nullableDate(formData.get("dateIssued")),
+    regionalOffice: nullableString(formData.get("regionalOffice")),
+    provincialOffice: nullableString(formData.get("provincialOffice")),
+    municipality: nullableString(formData.get("municipality")),
+    barangay: nullableString(formData.get("barangay")),
+    treesApplied: nullableInt(formData.get("treesApplied")),
+    treesApproved: nullableInt(formData.get("treesApproved")),
+    seedlingsReplacement: nullableInt(formData.get("seedlingsReplacement"))
+  };
+}
 
 function safeReturnTo(value: FormDataEntryValue | null, fallback: string) {
   const path = String(value || fallback);
@@ -114,26 +152,35 @@ export async function changeOwnPasswordAction(formData: FormData) {
 export async function createRecordAction(formData: FormData) {
   const user = await requireUser();
   const parsed = createRecordSchema.safeParse({
-    applicantName: formData.get("applicantName"),
-    applicationTypeId: formData.get("applicationTypeId"),
+    applicantName: formData.get("applicantName") || undefined,
+    applicationTypeId: formData.get("applicationTypeId") || undefined,
     remarks: formData.get("remarks") || undefined,
     documentIds: formData.getAll("documentIds").map(String)
   });
-  if (!parsed.success) redirectWithToast("/applications/new", "error", "Name and application type are required.");
+  if (!parsed.success) redirectWithToast("/applications/new", "error", "Could not read the application form.");
   const input = parsed.data;
+  const applicationTypeId = input.applicationTypeId || null;
+
+  if (!applicationTypeId && input.documentIds.length > 0) {
+    redirectWithToast("/applications/new", "error", "Choose a type of application before selecting documents.");
+  }
 
   let recordId = "";
   try {
-    const allowedDocuments = await prisma.requiredDocument.findMany({
-      where: { applicationTypeId: input.applicationTypeId, id: { in: input.documentIds }, active: true }
-    });
+    const allowedDocuments = applicationTypeId
+      ? await prisma.requiredDocument.findMany({
+          where: { applicationTypeId, id: { in: input.documentIds }, active: true, applicationType: { group: PERMIT_GROUP_PTC } }
+        })
+      : [];
 
     const record = await prisma.$transaction(async (tx) => {
       const created = await tx.applicationRecord.create({
         data: {
-          applicantName: input.applicantName,
-          applicationTypeId: input.applicationTypeId,
-          remarks: input.remarks,
+          group: PERMIT_GROUP_PTC,
+          applicantName: input.applicantName || null,
+          applicationTypeId,
+          remarks: input.remarks || null,
+          ...ptcRecordData(formData),
           createdById: user.id
         }
       });
@@ -182,6 +229,7 @@ export async function appendProgressAction(formData: FormData) {
     include: { progressDocuments: true }
   });
   if (!record) redirectWithToast("/applications", "error", "Application record was not found.");
+  if (!record.applicationTypeId) redirectWithToast(`/applications/${input.applicationRecordId}`, "error", "Choose a type of application before adding progress documents.");
 
   const existing = new Set(record.progressDocuments.map((doc) => doc.requiredDocumentId));
   const allowedDocuments = await prisma.requiredDocument.findMany({
@@ -234,27 +282,34 @@ export async function updateApplicationRecordAction(formData: FormData) {
   const returnTo = safeReturnTo(formData.get("returnTo"), "/applications");
   const parsed = updateRecordSchema.safeParse({
     id: formData.get("id"),
-    applicantName: formData.get("applicantName"),
-    applicationTypeId: formData.get("applicationTypeId"),
+    applicantName: formData.get("applicantName") || undefined,
+    applicationTypeId: formData.get("applicationTypeId") || undefined,
     remarks: formData.get("remarks") || undefined,
     documentIds: formData.getAll("documentIds").map(String),
     returnTo
   });
-  if (!parsed.success) redirectWithToast(returnTo, "error", "Name and application type are required.");
+  if (!parsed.success) redirectWithToast(returnTo, "error", "Could not read the application form.");
   const input = parsed.data;
+  const applicationTypeId = input.applicationTypeId || null;
 
   const current = await prisma.applicationRecord.findUnique({ where: { id: input.id } });
   if (!current) redirectWithToast("/applications", "error", "Application record was not found.");
+  if (!applicationTypeId && input.documentIds.length > 0) {
+    redirectWithToast(returnTo, "error", "Choose a type of application before selecting documents.");
+  }
 
   const requestedDocumentIds = [...new Set(input.documentIds)];
-  const allowedDocuments = await prisma.requiredDocument.findMany({
-    where: {
-      applicationTypeId: input.applicationTypeId,
-      id: { in: requestedDocumentIds },
-      active: true
-    },
-    orderBy: { sortOrder: "asc" }
-  });
+  const allowedDocuments = applicationTypeId
+    ? await prisma.requiredDocument.findMany({
+        where: {
+          applicationTypeId,
+          id: { in: requestedDocumentIds },
+          active: true,
+          applicationType: { group: PERMIT_GROUP_PTC }
+        },
+        orderBy: { sortOrder: "asc" }
+      })
+    : [];
   const allowedDocumentIds = new Set(allowedDocuments.map((document) => document.id));
   const invalidDocumentIds = requestedDocumentIds.filter((documentId) => !allowedDocumentIds.has(documentId));
   if (invalidDocumentIds.length > 0) {
@@ -268,9 +323,10 @@ export async function updateApplicationRecordAction(formData: FormData) {
       await tx.applicationRecord.update({
         where: { id: input.id },
         data: {
-          applicantName: input.applicantName,
-          applicationTypeId: input.applicationTypeId,
-          remarks: input.remarks
+          applicantName: input.applicantName || null,
+          applicationTypeId,
+          remarks: input.remarks || null,
+          ...ptcRecordData(formData)
         }
       });
 
@@ -299,7 +355,7 @@ export async function updateApplicationRecordAction(formData: FormData) {
           targetType: "application_record",
           targetId: input.id,
           metadata: {
-            applicationTypeChanged: current.applicationTypeId !== input.applicationTypeId,
+            applicationTypeChanged: current.applicationTypeId !== applicationTypeId,
             submittedDocumentCount: allowedDocuments.length,
             source: "EDIT_MODAL"
           }
@@ -391,8 +447,8 @@ export async function createApplicationTypeAction(formData: FormData) {
   if (!name) redirectWithToast("/admin/master-data", "error", "Application type name is required.");
 
   try {
-    const count = await prisma.applicationType.count();
-    await prisma.applicationType.create({ data: { name, sortOrder: count + 1 } });
+    const count = await prisma.applicationType.count({ where: { group: PERMIT_GROUP_PTC } });
+    await prisma.applicationType.create({ data: { group: PERMIT_GROUP_PTC, name, sortOrder: count + 1 } });
   } catch {
     redirectWithToast("/admin/master-data", "error", "Could not add the application type. It may already exist.");
   }
@@ -409,6 +465,8 @@ export async function createRequiredDocumentAction(formData: FormData) {
   if (!applicationTypeId || !name) redirectWithToast("/admin/master-data", "error", "Application type and document name are required.");
 
   try {
+    const applicationType = await prisma.applicationType.findFirst({ where: { id: applicationTypeId, group: PERMIT_GROUP_PTC } });
+    if (!applicationType) redirectWithToast("/admin/master-data", "error", "Application type was not found.");
     const count = await prisma.requiredDocument.count({ where: { applicationTypeId } });
     await prisma.requiredDocument.create({ data: { applicationTypeId, name, sortOrder: count + 1 } });
   } catch {
@@ -421,6 +479,47 @@ export async function createRequiredDocumentAction(formData: FormData) {
   redirectWithToast("/admin/master-data", "success", "Required document added.");
 }
 
+export async function importPtcRecordsAction(formData: FormData) {
+  const user = await requireAdmin();
+  const file = formData.get("file");
+  if (!(file instanceof File)) redirectWithToast("/admin/master-data", "error", "Upload a PTC Excel file.");
+
+  let parsed;
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    parsed = parsePtcRecordsWorkbook(buffer);
+  } catch {
+    redirectWithToast("/admin/master-data", "error", "Could not read the PTC Excel file.");
+  }
+
+  if (parsed.length === 0) redirectWithToast("/admin/master-data", "error", "No PTC rows were found to import.");
+
+  try {
+    await prisma.applicationRecord.createMany({
+      data: parsed.map((record) => ({
+        group: PERMIT_GROUP_PTC,
+        createdById: user.id,
+        applicantName: record.applicantName || null,
+        applicationTypeId: null,
+        regionalOffice: record.regionalOffice || null,
+        provincialOffice: record.provincialOffice || null,
+        ptcNumber: record.ptcNumber || null,
+        dateIssued: record.dateIssued || null,
+        barangay: record.barangay || null,
+        municipality: record.municipality || null,
+        treesApplied: record.treesApplied ?? null,
+        treesApproved: record.treesApproved ?? null,
+        seedlingsReplacement: record.seedlingsReplacement ?? null
+      }))
+    });
+  } catch {
+    redirectWithToast("/admin/master-data", "error", "Could not import the PTC records.");
+  }
+
+  revalidateReports();
+  redirectWithToast("/admin/master-data", "success", `Imported ${parsed.length} PTC record${parsed.length === 1 ? "" : "s"}.`);
+}
+
 export async function importMasterDataAction(formData: FormData) {
   await requireAdmin();
   const file = formData.get("file");
@@ -431,9 +530,9 @@ export async function importMasterDataAction(formData: FormData) {
   await prisma.$transaction(async (tx) => {
     for (const app of parsed) {
       const applicationType = await tx.applicationType.upsert({
-        where: { name: app.name },
+        where: { group_name: { group: PERMIT_GROUP_PTC, name: app.name } },
         update: { active: true, sortOrder: app.sortOrder },
-        create: { name: app.name, sortOrder: app.sortOrder }
+        create: { group: PERMIT_GROUP_PTC, name: app.name, sortOrder: app.sortOrder }
       });
 
       for (const doc of app.documents) {

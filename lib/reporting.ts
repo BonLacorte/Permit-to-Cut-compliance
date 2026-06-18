@@ -1,3 +1,5 @@
+import { displayPtcField, formatDate } from "@/lib/ptc";
+
 export type RequiredDocumentRef = {
   id: string;
   name: string;
@@ -7,12 +9,23 @@ export type RequiredDocumentRef = {
 
 export type RecordRef = {
   id: string;
+  group?: string;
   applicantName: string;
-  applicationTypeId: string;
+  applicationTypeId: string | null;
   applicationTypeName: string;
   selectedDocumentIds: string[];
   remarks?: string;
   createdByName?: string;
+  ptcNumber?: string | null;
+  dateIssued?: Date | string | null;
+  regionalOffice?: string | null;
+  provincialOffice?: string | null;
+  municipality?: string | null;
+  barangay?: string | null;
+  treesApplied?: number | null;
+  treesApproved?: number | null;
+  seedlingsReplacement?: number | null;
+  ptcNumberDuplicate?: boolean;
 };
 
 export type RecordAudit = RecordRef & {
@@ -25,6 +38,18 @@ export type RecordAudit = RecordRef & {
 };
 
 export function auditRecord(record: RecordRef, requiredDocuments: RequiredDocumentRef[]): RecordAudit {
+  if (!record.applicationTypeId) {
+    return {
+      ...record,
+      requiredCount: 0,
+      submittedCount: 0,
+      missingCount: 0,
+      status: "Incomplete",
+      missingDocuments: [],
+      selectedDocuments: []
+    };
+  }
+
   const requiredForType = requiredDocuments.filter((doc) => doc.applicationTypeId === record.applicationTypeId);
   const selected = new Set(record.selectedDocumentIds);
   const selectedDocuments = requiredForType.filter((doc) => selected.has(doc.id));
@@ -59,8 +84,7 @@ export function completionSummary(audits: RecordAudit[]) {
 
 export function applicationSummary(audits: RecordAudit[], requiredDocuments: RequiredDocumentRef[]) {
   const applicationNames = Array.from(new Map(requiredDocuments.map((doc) => [doc.applicationTypeId, doc.applicationTypeName])));
-
-  return applicationNames.map(([applicationTypeId, applicationTypeName]) => {
+  const summaries = applicationNames.map(([applicationTypeId, applicationTypeName]) => {
     const scoped = audits.filter((audit) => audit.applicationTypeId === applicationTypeId);
     const complete = scoped.filter((audit) => audit.status === "Complete").length;
     const incomplete = scoped.length - complete;
@@ -75,6 +99,22 @@ export function applicationSummary(audits: RecordAudit[], requiredDocuments: Req
       missingDocumentInstances: scoped.reduce((sum, audit) => sum + audit.missingCount, 0)
     };
   });
+
+  const unclassified = audits.filter((audit) => !audit.applicationTypeId);
+  if (unclassified.length > 0) {
+    summaries.unshift({
+      applicationTypeId: "",
+      applicationTypeName: "Unclassified",
+      totalRecords: unclassified.length,
+      completeRecords: 0,
+      incompleteRecords: unclassified.length,
+      completionRate: 0,
+      requiredDocumentCount: 0,
+      missingDocumentInstances: 0
+    });
+  }
+
+  return summaries;
 }
 
 export function documentSummary(audits: RecordAudit[], requiredDocuments: RequiredDocumentRef[]) {
@@ -126,4 +166,25 @@ export function documentCombinations(audits: RecordAudit[]) {
   return Array.from(counts.values())
     .map((row) => ({ ...row, share: row.appTotal === 0 ? 0 : row.count / row.appTotal }))
     .sort((a, b) => a.applicationTypeName.localeCompare(b.applicationTypeName) || b.count - a.count);
+}
+
+export function applicationExportRows(audits: RecordAudit[]) {
+  return audits.map((audit) => ({
+    "Date Issued": formatDate(audit.dateIssued),
+    "PTC Number": audit.ptcNumber || "",
+    "Duplicate PTC Number": audit.ptcNumberDuplicate ? "Yes" : "No",
+    "Name of Applicant": audit.applicantName,
+    "Type of application": audit.applicationTypeName,
+    "Regional Office": displayPtcField(audit, "regionalOffice"),
+    "Provincial Office": displayPtcField(audit, "provincialOffice"),
+    Barangay: displayPtcField(audit, "barangay"),
+    Municipality: displayPtcField(audit, "municipality"),
+    "No. of trees applied": displayPtcField(audit, "treesApplied"),
+    "No. of trees approved": displayPtcField(audit, "treesApproved"),
+    "No. of Seedlings Replacement": displayPtcField(audit, "seedlingsReplacement"),
+    "Selected Documents": audit.selectedDocuments.map((doc) => doc.name).join(", "),
+    "Missing Count": audit.missingCount,
+    "Missing Documents": audit.missingDocuments.map((doc) => doc.name).join(", "),
+    Status: audit.status
+  }));
 }

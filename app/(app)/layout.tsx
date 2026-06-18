@@ -4,7 +4,7 @@ import { ChangePasswordButton } from "@/components/change-password-button";
 import { SubmitButton } from "@/components/submit-button";
 import { requireUser } from "@/lib/auth";
 
-const nav = [
+const ptcNav = [
   ["Dashboard", "/dashboard"],
   ["Applications", "/applications"],
   ["Missing Documents", "/reports/missing-documents"],
@@ -28,12 +28,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </div>
         <nav className="nav">
-          {nav.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}
+          <div className="nav-group">
+            <div className="nav-group-title">PTC</div>
+            {ptcNav.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}
+          </div>
+          <div className="nav-group">
+            <div className="nav-group-title">PTT</div>
+            <span className="nav-placeholder">Coming soon</span>
+          </div>
           {user.role === "ADMIN" ? (
-            <>
+            <div className="nav-group">
+              <div className="nav-group-title">Admin</div>
               <Link href="/admin/master-data">Master Data</Link>
               <Link href="/admin/users">Users</Link>
-            </>
+            </div>
           ) : null}
           <form action={logoutAction}>
             <SubmitButton className="nav-submit" pendingText="Signing out...">Sign out</SubmitButton>

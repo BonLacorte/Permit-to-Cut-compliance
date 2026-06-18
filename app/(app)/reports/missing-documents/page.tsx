@@ -1,10 +1,11 @@
 import { ReportTable } from "@/components/report-table";
 import { getReportData } from "@/lib/data";
+import { displayApplicantName } from "@/lib/ptc";
 
 export default async function MissingDocumentsPage() {
   const { audits } = await getReportData();
   const rows = audits.filter((audit) => audit.missingCount > 0).map((audit) => ({
-    applicantName: audit.applicantName,
+    applicantName: displayApplicantName(audit),
     applicationTypeName: audit.applicationTypeName,
     missingCount: audit.missingCount,
     missingDocuments: audit.missingDocuments.map((doc) => doc.name),

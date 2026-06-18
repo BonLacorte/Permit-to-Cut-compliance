@@ -4,6 +4,7 @@ import { Role } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { hashPassword } from "../lib/password";
 import { parseGroundsWorkbook } from "../lib/excel";
+import { PERMIT_GROUP_PTC } from "../lib/ptc";
 
 async function main() {
   const workbookPath =
@@ -29,9 +30,9 @@ async function main() {
 
   for (const app of applicationTypes) {
     const applicationType = await prisma.applicationType.upsert({
-      where: { name: app.name },
+      where: { group_name: { group: PERMIT_GROUP_PTC, name: app.name } },
       update: { active: true, sortOrder: app.sortOrder },
-      create: { name: app.name, active: true, sortOrder: app.sortOrder }
+      create: { group: PERMIT_GROUP_PTC, name: app.name, active: true, sortOrder: app.sortOrder }
     });
 
     for (const document of app.documents) {
@@ -60,3 +61,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

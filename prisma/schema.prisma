@@ -29,7 +29,8 @@ model User {
 
 model ApplicationType {
   id        String               @id @default(cuid())
-  name      String               @unique
+  group     String               @default("PTC")
+  name      String
   active    Boolean              @default(true)
   sortOrder Int                  @default(0)
   createdAt DateTime             @default(now())
@@ -37,6 +38,7 @@ model ApplicationType {
   documents RequiredDocument[]
   records   ApplicationRecord[]
 
+  @@unique([group, name])
   @@map("application_types")
 }
 
@@ -56,19 +58,31 @@ model RequiredDocument {
 }
 
 model ApplicationRecord {
-  id                String             @id @default(cuid())
-  applicantName     String
-  applicationTypeId String
-  remarks           String?
-  createdById       String
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  applicationType   ApplicationType    @relation(fields: [applicationTypeId], references: [id])
-  createdBy         User               @relation("CreatedRecords", fields: [createdById], references: [id])
-  progressEntries   ProgressEntry[]
-  progressDocuments ProgressDocument[]
+  id                   String             @id @default(cuid())
+  group                String             @default("PTC")
+  applicantName        String?
+  applicationTypeId    String?
+  remarks              String?
+  ptcNumber            String?
+  dateIssued           DateTime?
+  regionalOffice       String?
+  provincialOffice     String?
+  municipality         String?
+  barangay             String?
+  treesApplied         Int?
+  treesApproved        Int?
+  seedlingsReplacement Int?
+  createdById          String
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  applicationType      ApplicationType?   @relation(fields: [applicationTypeId], references: [id])
+  createdBy            User               @relation("CreatedRecords", fields: [createdById], references: [id])
+  progressEntries      ProgressEntry[]
+  progressDocuments    ProgressDocument[]
 
   @@index([applicationTypeId])
+  @@index([group])
+  @@index([ptcNumber])
   @@map("application_records")
 }
 

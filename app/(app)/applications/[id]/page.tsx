@@ -3,7 +3,12 @@ import { notFound } from "next/navigation";
 import { EditApplicationButton } from "@/components/edit-application-button";
 import { StatusBadge } from "@/components/status-badge";
 import { getApplicationTypesWithDocuments, getReportData } from "@/lib/data";
+import { displayApplicantName, displayPtcField, formatDate } from "@/lib/ptc";
 import { prisma } from "@/lib/prisma";
+
+function metadataValue(value: string) {
+  return value || <span className="muted">Blank</span>;
+}
 
 export default async function ApplicationDetailPage({ params }: { params: { id: string } }) {
   const [record, applicationTypes, report] = await Promise.all([
@@ -31,29 +36,38 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
     name: type.name,
     documents: type.documents.map((document) => ({ id: document.id, name: document.name }))
   }));
+  const applicantName = displayApplicantName(record);
+  const dateIssued = formatDate(record.dateIssued);
 
   return (
     <div className="grid">
       <div className="topbar">
-        <div>
-          <Link className="button secondary" href="/applications">Back to Applications</Link>
-        </div>
+        <Link className="button secondary" href="/applications">Back to Applications</Link>
         <EditApplicationButton
           record={{
             id: record.id,
-            applicantName: record.applicantName,
+            applicantName: record.applicantName || "",
             applicationTypeId: record.applicationTypeId,
             remarks: record.remarks || "",
             selectedDocumentIds: existingDocumentIds,
-            returnTo: `/applications/${record.id}`
+            returnTo: `/applications/${record.id}`,
+            dateIssued,
+            ptcNumber: record.ptcNumber || "",
+            regionalOffice: record.regionalOffice || "",
+            provincialOffice: record.provincialOffice || "",
+            municipality: record.municipality || "",
+            barangay: record.barangay || "",
+            treesApplied: record.treesApplied,
+            treesApproved: record.treesApproved,
+            seedlingsReplacement: record.seedlingsReplacement
           }}
           applicationTypes={applicationTypeOptions}
         />
       </div>
 
       <div>
-        <h1>{record.applicantName}</h1>
-        <p className="muted">{record.applicationType.name}</p>
+        <h1>{applicantName}</h1>
+        <p className="muted">{record.applicationType?.name || "No type of application selected yet"}</p>
         {record.remarks ? <p>{record.remarks}</p> : null}
       </div>
 
@@ -62,6 +76,27 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
         <div className="card stat"><span>Submitted</span><strong>{audit.submittedCount}</strong></div>
         <div className="card stat"><span>Missing</span><strong>{audit.missingCount}</strong></div>
         <div className="card stat"><span>Status</span><strong><StatusBadge status={audit.status} /></strong></div>
+      </section>
+
+      <section className="panel">
+        <div className="section-heading-row">
+          <div>
+            <h2>PTC Record Information</h2>
+            <p className="muted">Metadata for the application request. Blank tree counts are treated as 0.</p>
+          </div>
+          {audit.ptcNumberDuplicate ? <span className="badge danger-badge">Duplicate PTC Number</span> : null}
+        </div>
+        <div className="metadata-grid">
+          <div><span>Date Issued</span><strong>{metadataValue(dateIssued)}</strong></div>
+          <div><span>PTC Number</span><strong>{metadataValue(record.ptcNumber || "")}</strong></div>
+          <div><span>Regional Office</span><strong>{metadataValue(displayPtcField(record, "regionalOffice"))}</strong></div>
+          <div><span>Provincial Office</span><strong>{metadataValue(displayPtcField(record, "provincialOffice"))}</strong></div>
+          <div><span>Municipality</span><strong>{metadataValue(displayPtcField(record, "municipality"))}</strong></div>
+          <div><span>Barangay</span><strong>{metadataValue(displayPtcField(record, "barangay"))}</strong></div>
+          <div><span>No. of trees applied</span><strong>{displayPtcField(record, "treesApplied")}</strong></div>
+          <div><span>No. of trees approved</span><strong>{displayPtcField(record, "treesApproved")}</strong></div>
+          <div><span>No. of Seedlings Replacement</span><strong>{displayPtcField(record, "seedlingsReplacement")}</strong></div>
+        </div>
       </section>
 
       <section className="grid cols-2">

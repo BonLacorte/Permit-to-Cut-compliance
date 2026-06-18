@@ -14,7 +14,7 @@ export function DocumentPicker({
   existingDocumentIds = []
 }: {
   applicationTypes: ApplicationType[];
-  selectedApplicationTypeId?: string;
+  selectedApplicationTypeId?: string | null;
   existingDocumentIds?: string[];
 }) {
   const [applicationTypeId, setApplicationTypeId] = useState(selectedApplicationTypeId || "");
@@ -38,14 +38,13 @@ export function DocumentPicker({
           <select
             id="applicationTypeId"
             name="applicationTypeId"
-            required
             value={applicationTypeId}
             onChange={(event) => {
               setApplicationTypeId(event.target.value);
               setSelected([]);
             }}
           >
-            <option value="">Choose application type</option>
+            <option value="">No type yet</option>
             {applicationTypes.map((type) => (
               <option key={type.id} value={type.id}>{type.name}</option>
             ))}
@@ -58,7 +57,7 @@ export function DocumentPicker({
       <div className="field">
         <label>Type of document</label>
         <div className="checklist">
-          {!current ? <div className="muted">Choose an application type first.</div> : null}
+          {!current ? <div className="muted">Choose an application type later to select required documents.</div> : null}
           {current?.documents.map((document) => {
             const alreadyAttached = existing.has(document.id);
             return (

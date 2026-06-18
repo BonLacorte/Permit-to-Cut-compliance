@@ -14,10 +14,10 @@ export function EditSubmittedFiles({
   initialDocumentIds
 }: {
   applicationTypes: ApplicationTypeOption[];
-  initialApplicationTypeId: string;
+  initialApplicationTypeId?: string | null;
   initialDocumentIds: string[];
 }) {
-  const [applicationTypeId, setApplicationTypeId] = useState(initialApplicationTypeId);
+  const [applicationTypeId, setApplicationTypeId] = useState(initialApplicationTypeId || "");
   const [selectedDocumentIds, setSelectedDocumentIds] = useState(initialDocumentIds);
 
   const currentType = useMemo(
@@ -45,9 +45,9 @@ export function EditSubmittedFiles({
         <select
           name="applicationTypeId"
           value={applicationTypeId}
-          required
           onChange={(event) => changeApplicationType(event.target.value)}
         >
+          <option value="">No type yet</option>
           {applicationTypes.map((type) => (
             <option key={type.id} value={type.id}>{type.name}</option>
           ))}
@@ -61,7 +61,7 @@ export function EditSubmittedFiles({
           <span className="selected-count">{selectedDocumentIds.length} selected</span>
         </div>
         <div className="submitted-files-box">
-          {!currentType ? <div className="empty-state">Choose an application type first.</div> : null}
+          {!currentType ? <div className="empty-state">Choose an application type later to select submitted files.</div> : null}
           {currentType?.documents.map((document) => {
             const checked = selectedDocumentIds.includes(document.id);
             return (
