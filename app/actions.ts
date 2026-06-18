@@ -391,6 +391,69 @@ export async function deleteApplicationRecordAction(formData: FormData) {
   redirectWithToast("/applications", "success", "Application deleted.");
 }
 
+export async function bulkDeleteApplicationRecordsAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const ids = [...new Set(formData.getAll("applicationRecordIds").map(String).filter(Boolean))];
+  if (ids.length === 0) redirectWithToast("/applications", "error", "Select at least one application to delete.");
+
+  const records = await prisma.applicationRecord.findMany({
+    where: { id: { in: ids }, group: PERMIT_GROUP_PTC },
+    select: { id: true }
+  });
+  if (records.length !== ids.length) {
+    redirectWithToast("/applications", "error", "Some selected applications were already deleted or are not PTC records.");
+  }
+
+  const recordIds = records.map((record) => record.id);
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.applicationRecord.deleteMany({ where: { id: { in: recordIds }, group: PERMIT_GROUP_PTC } });
+      await tx.activityLog.create({
+        data: {
+          userId: admin.id,
+          action: "BULK_DELETE_RECORDS",
+          targetType: "application_record",
+          metadata: { deletedCount: recordIds.length, recordIds }
+        }
+      });
+    });
+  } catch {
+    redirectWithToast("/applications", "error", "Could not delete the selected applications.");
+  }
+
+  revalidateReports();
+  redirectWithToast("/applications", "success", `Deleted ${recordIds.length} application${recordIds.length === 1 ? "" : "s"}.`);
+}
+
+export async function deleteAllApplicationRecordsAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const confirmation = String(formData.get("confirmation") || "").trim();
+  if (confirmation !== "DELETE ALL PTC") {
+    redirectWithToast("/applications", "error", "Type DELETE ALL PTC to confirm deleting all applications.");
+  }
+
+  let deletedCount = 0;
+  try {
+    await prisma.$transaction(async (tx) => {
+      const result = await tx.applicationRecord.deleteMany({ where: { group: PERMIT_GROUP_PTC } });
+      deletedCount = result.count;
+      await tx.activityLog.create({
+        data: {
+          userId: admin.id,
+          action: "DELETE_ALL_RECORDS",
+          targetType: "application_record",
+          metadata: { deletedCount, group: PERMIT_GROUP_PTC }
+        }
+      });
+    });
+  } catch {
+    redirectWithToast("/applications", "error", "Could not delete all applications.");
+  }
+
+  revalidateReports();
+  redirectWithToast("/applications", "success", `Deleted all PTC applications (${deletedCount} record${deletedCount === 1 ? "" : "s"}).`);
+}
+
 export async function createUserAction(formData: FormData) {
   await requireAdmin();
   const name = String(formData.get("name") || "").trim();
@@ -548,3 +611,4 @@ export async function importMasterDataAction(formData: FormData) {
   revalidatePath("/admin/master-data");
   revalidatePath("/applications/new");
 }
+

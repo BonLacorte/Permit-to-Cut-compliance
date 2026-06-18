@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { ApplicationsTable } from "@/components/applications-table";
+import { requireUser } from "@/lib/auth";
 import { getApplicationTypesWithDocuments, getReportData } from "@/lib/data";
 import { displayPtcField, formatDate } from "@/lib/ptc";
 
 export default async function ApplicationsPage() {
-  const [{ audits }, applicationTypes] = await Promise.all([
+  const [user, { audits }, applicationTypes] = await Promise.all([
+    requireUser(),
     getReportData(),
     getApplicationTypesWithDocuments()
   ]);
@@ -53,6 +55,7 @@ export default async function ApplicationsPage() {
       <section className="panel">
         <ApplicationsTable
           rows={rows}
+          canBulkDelete={user.role === "ADMIN"}
           applicationTypes={applicationTypes.map((type) => ({
             id: type.id,
             name: type.name,
