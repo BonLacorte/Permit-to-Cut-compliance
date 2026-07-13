@@ -8,26 +8,146 @@ import {
   documentSummary
 } from "@/lib/reporting";
 
-export async function getApplicationTypesWithDocuments(group = PERMIT_GROUP_PTC) {
+import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
+
+type VersionScopedOptions = {
+  group?: string;
+  versionId?: string | null;
+};
+
+function firstParam(value?: string | string[] | null) {
+  return Array.isArray(value) ? value[0] : value || undefined;
+}
+
+export function versionQueryValue(versionId: string | null) {
+  return versionId || UNCATEGORIZED_VERSION;
+}
+
+export async function getVersionChoices(group = PERMIT_GROUP_PTC, includeInactive = false) {
+  return prisma.ptcVersion.findMany({
+    where: { group, ...(includeInactive ? {} : { active: true }) },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+  });
+}
+
+export async function getVersionContext(rawVersion?: string | string[] | null, group = PERMIT_GROUP_PTC) {
+  const versions = await getVersionChoices(group, true);
+  const activeVersions = versions.filter((version) => version.active);
+  const archivedVersions = versions.filter((version) => !version.active);
+  const requested = firstParam(rawVersion);
+  const requestedVersion = requested ? versions.find((version) => version.id === requested) : null;
+  const defaultVersion = activeVersions.length > 0 ? activeVersions[activeVersions.length - 1] : null;
+  const selectedVersionId = requested === UNCATEGORIZED_VERSION ? null : requestedVersion?.id ?? defaultVersion?.id ?? null;
+  const selectedVersion = selectedVersionId ? versions.find((version) => version.id === selectedVersionId) : null;
+  const selectedVersionName = selectedVersion?.name || "Uncategorized";
+
+  return {
+    versions,
+    activeVersions,
+    archivedVersions,
+    selectedVersionId,
+    selectedVersion,
+    selectedVersionName,
+    selectedVersionParam: versionQueryValue(selectedVersionId),
+    options: [
+      ...activeVersions.map((version) => ({ id: version.id, name: version.name, active: version.active })),
+      ...archivedVersions.map((version) => ({ id: version.id, name: version.name, active: version.active })),
+      { id: UNCATEGORIZED_VERSION, name: "Uncategorized", active: true }
+    ]
+  };
+}
+
+export async function getApplicationTypesWithDocuments(options: VersionScopedOptions = {}) {
+  const group = options.group ?? PERMIT_GROUP_PTC;
+  if (options.versionId === null) return [];
+
   return prisma.applicationType.findMany({
-    where: { active: true, group },
+    where: {
+      active: true,
+      group,
+      ...(options.versionId !== undefined ? { versionId: options.versionId } : { version: { active: true } })
+    },
     include: { documents: { where: { active: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] } },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
   });
 }
 
-export async function getReportData(group = PERMIT_GROUP_PTC) {
-  const [documents, records] = await Promise.all([
+export async function getDeactivatedMasterData(group = PERMIT_GROUP_PTC) {
+  const [versions, applicationTypes, requiredDocuments, regionalOffices, provincialOffices] = await Promise.all([
+    prisma.ptcVersion.findMany({
+      where: { group, active: false },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+    }),
+    prisma.applicationType.findMany({
+      where: { group, active: false },
+      include: { version: true },
+      orderBy: [{ version: { sortOrder: "asc" } }, { sortOrder: "asc" }, { name: "asc" }]
+    }),
     prisma.requiredDocument.findMany({
-      where: { active: true, applicationType: { active: true, group } },
-      include: { applicationType: true },
+      where: { active: false, applicationType: { group } },
+      include: { applicationType: { include: { version: true } } },
       orderBy: [{ applicationType: { sortOrder: "asc" } }, { sortOrder: "asc" }, { name: "asc" }]
     }),
+    prisma.regionalOffice.findMany({
+      where: { group, active: false },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+    }),
+    prisma.provincialOffice.findMany({
+      where: { active: false, regionalOffice: { group } },
+      include: { regionalOffice: true },
+      orderBy: [{ regionalOffice: { sortOrder: "asc" } }, { sortOrder: "asc" }, { name: "asc" }]
+    })
+  ]);
+
+  return {
+    versions,
+    applicationTypes,
+    requiredDocuments,
+    regionalOffices,
+    provincialOffices
+  };
+}
+
+export async function getOfficeChoices(group = PERMIT_GROUP_PTC) {
+  return prisma.regionalOffice.findMany({
+    where: { active: true, group },
+    include: { provincialOffices: { where: { active: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] } },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+  });
+}
+
+export async function getReportData(options: VersionScopedOptions = {}) {
+  const group = options.group ?? PERMIT_GROUP_PTC;
+  const versionId = options.versionId;
+  const selectedVersion = versionId ? await prisma.ptcVersion.findFirst({ where: { id: versionId, group } }) : null;
+  const selectedVersionIsArchived = !!selectedVersion && !selectedVersion.active;
+  const recordWhere = { group, ...(versionId !== undefined ? { versionId } : {}) };
+  const documentWhere = versionId === null
+    ? null
+    : {
+        ...(selectedVersionIsArchived ? {} : { active: true }),
+        applicationType: {
+          group,
+          ...(selectedVersionIsArchived ? {} : { active: true }),
+          ...(versionId !== undefined ? { versionId } : { version: { active: true } })
+        }
+      };
+
+  const [documents, records] = await Promise.all([
+    documentWhere
+      ? prisma.requiredDocument.findMany({
+          where: documentWhere,
+          include: { applicationType: true },
+          orderBy: [{ applicationType: { sortOrder: "asc" } }, { sortOrder: "asc" }, { name: "asc" }]
+        })
+      : Promise.resolve([]),
     prisma.applicationRecord.findMany({
-      where: { group },
+      where: recordWhere,
       include: {
+        version: true,
         applicationType: true,
         createdBy: true,
+        editedBy: true,
         progressDocuments: { include: { requiredDocument: true } }
       },
       orderBy: { createdAt: "desc" }
@@ -50,19 +170,25 @@ export async function getReportData(group = PERMIT_GROUP_PTC) {
   const requiredDocuments = documents.map((doc) => ({
     id: doc.id,
     name: doc.name,
+    versionId: doc.applicationType.versionId,
     applicationTypeId: doc.applicationTypeId,
-    applicationTypeName: doc.applicationType.name
+    applicationTypeName: doc.applicationType.name,
+    optional: doc.optional
   }));
 
   const recordRefs = records.map((record) => ({
     id: record.id,
     group: record.group,
+    versionId: record.versionId,
+    versionName: record.version?.name || "Uncategorized",
     applicantName: record.applicantName || "",
-    applicationTypeId: record.applicationTypeId,
-    applicationTypeName: record.applicationType?.name || "Unclassified",
+    applicationTypeId: record.versionId ? record.applicationTypeId : null,
+    applicationTypeVersionId: record.applicationType?.versionId || null,
+    applicationTypeName: record.versionId ? record.applicationType?.name || "Pending" : "Pending",
     selectedDocumentIds: record.progressDocuments.map((doc) => doc.requiredDocumentId),
     remarks: record.remarks || "",
     createdByName: record.createdBy.name,
+    editedByName: record.editedBy?.name || "",
     ptcNumber: record.ptcNumber,
     dateIssued: record.dateIssued,
     regionalOffice: record.regionalOffice,
@@ -72,6 +198,11 @@ export async function getReportData(group = PERMIT_GROUP_PTC) {
     treesApplied: record.treesApplied,
     treesApproved: record.treesApproved,
     seedlingsReplacement: record.seedlingsReplacement,
+    actualFee: record.actualFee,
+    recordedFee: record.recordedFee,
+    replantedSeedlings: record.replantedSeedlings,
+    recommendingApproval: record.recommendingApproval,
+    approved: record.approved,
     ptcNumberDuplicate: !!record.ptcNumber && duplicatePtcNumbers.has(record.ptcNumber)
   }));
 

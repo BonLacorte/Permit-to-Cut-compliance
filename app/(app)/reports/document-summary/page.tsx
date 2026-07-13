@@ -1,8 +1,10 @@
 import { ReportTable } from "@/components/report-table";
-import { getReportData } from "@/lib/data";
+import { VersionFilter } from "@/components/version-filter";
+import { getReportData, getVersionContext } from "@/lib/data";
 
-export default async function DocumentSummaryPage() {
-  const { documents } = await getReportData();
+export default async function DocumentSummaryPage({ searchParams }: { searchParams?: { version?: string | string[] } }) {
+  const versionContext = await getVersionContext(searchParams?.version);
+  const { documents } = await getReportData({ versionId: versionContext.selectedVersionId });
   const rows = documents.map((doc) => ({
     applicationTypeName: doc.applicationTypeName,
     requiredDocumentName: doc.requiredDocumentName,
@@ -14,9 +16,12 @@ export default async function DocumentSummaryPage() {
 
   return (
     <div className="grid">
-      <div>
-        <h1>Document Summary</h1>
-        <p className="muted">Submitted and missing document counts by application and required document.</p>
+      <div className="topbar">
+        <div>
+          <h1>Document Summary</h1>
+          <p className="muted">Submitted and missing document counts by application and required document.</p>
+        </div>
+        <VersionFilter options={versionContext.options} selected={versionContext.selectedVersionParam} path="/reports/document-summary" />
       </div>
       <section className="panel">
         <ReportTable

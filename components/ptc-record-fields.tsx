@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PROVINCIAL_OFFICES_BY_REGION, REGIONAL_OFFICES } from "@/lib/ptc";
+import type { OfficeChoice } from "@/lib/ptc";
 
 type PtcRecordFieldsProps = {
+  officeChoices: OfficeChoice[];
   defaults?: {
     dateIssued?: string | null;
     ptcNumber?: string | null;
@@ -14,12 +15,24 @@ type PtcRecordFieldsProps = {
     treesApplied?: number | null;
     treesApproved?: number | null;
     seedlingsReplacement?: number | null;
+    actualFee?: string | number | null;
+    recordedFee?: string | number | null;
+    replantedSeedlings?: boolean | null;
+    recommendingApproval?: string | null;
+    approved?: string | null;
   };
 };
 
-export function PtcRecordFields({ defaults }: PtcRecordFieldsProps) {
+function feeDefault(value?: string | number | null) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+export function PtcRecordFields({ defaults, officeChoices }: PtcRecordFieldsProps) {
   const [regionalOffice, setRegionalOffice] = useState(defaults?.regionalOffice || "");
-  const provincialOffices = useMemo(() => PROVINCIAL_OFFICES_BY_REGION[regionalOffice] || [], [regionalOffice]);
+  const provincialOffices = useMemo(
+    () => officeChoices.find((office) => office.name === regionalOffice)?.provincialOffices || [],
+    [officeChoices, regionalOffice]
+  );
 
   return (
     <section className="form-section">
@@ -42,14 +55,14 @@ export function PtcRecordFields({ defaults }: PtcRecordFieldsProps) {
             onChange={(event) => setRegionalOffice(event.target.value)}
           >
             <option value="">Choose regional office</option>
-            {REGIONAL_OFFICES.map((office) => <option key={office} value={office}>{office}</option>)}
+            {officeChoices.map((office) => <option key={office.id} value={office.name}>{office.name}</option>)}
           </select>
         </div>
         <div className="field">
           <label htmlFor="provincialOffice">Provincial Office</label>
           <select id="provincialOffice" name="provincialOffice" defaultValue={defaults?.provincialOffice || ""}>
             <option value="">Choose provincial office</option>
-            {provincialOffices.map((office) => <option key={office} value={office}>{office}</option>)}
+            {provincialOffices.map((office) => <option key={office.id} value={office.name}>{office.name}</option>)}
           </select>
         </div>
         <div className="field">
@@ -71,6 +84,30 @@ export function PtcRecordFields({ defaults }: PtcRecordFieldsProps) {
         <div className="field">
           <label htmlFor="seedlingsReplacement">Number of Seedlings Replacement</label>
           <input id="seedlingsReplacement" name="seedlingsReplacement" type="number" min="0" defaultValue={defaults?.seedlingsReplacement ?? ""} />
+        </div>
+        <div className="field">
+          <label htmlFor="actualFee">Actual Fee</label>
+          <input id="actualFee" name="actualFee" type="number" min="0" step="0.01" defaultValue={feeDefault(defaults?.actualFee)} />
+        </div>
+        <div className="field">
+          <label htmlFor="recordedFee">Recorded Fee</label>
+          <input id="recordedFee" name="recordedFee" type="number" min="0" step="0.01" defaultValue={feeDefault(defaults?.recordedFee)} />
+        </div>
+        <div className="field">
+          <label htmlFor="replantedSeedlings">Replanted Seedlings</label>
+          <select id="replantedSeedlings" name="replantedSeedlings" defaultValue={defaults?.replantedSeedlings === true ? "true" : defaults?.replantedSeedlings === false ? "false" : ""}>
+            <option value="">Blank</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="recommendingApproval">Recommending Approval</label>
+          <input id="recommendingApproval" name="recommendingApproval" defaultValue={defaults?.recommendingApproval || ""} />
+        </div>
+        <div className="field">
+          <label htmlFor="approved">Approved</label>
+          <input id="approved" name="approved" defaultValue={defaults?.approved || ""} />
         </div>
       </div>
     </section>

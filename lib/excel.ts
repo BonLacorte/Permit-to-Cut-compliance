@@ -12,6 +12,7 @@ export type ParsedPtcRecord = {
   treesApplied?: number;
   treesApproved?: number;
   seedlingsReplacement?: number;
+  applicationTypeName?: string;
 };
 
 export function parseGroundsWorkbook(buffer: Buffer) {
@@ -74,7 +75,8 @@ export function parsePtcRecordsWorkbook(buffer: Buffer): ParsedPtcRecord[] {
     municipality: cellText(row[6]) || undefined,
     treesApplied: parseNumberCell(row[7]),
     treesApproved: parseNumberCell(row[8]),
-    seedlingsReplacement: parseNumberCell(row[9])
+    seedlingsReplacement: parseNumberCell(row[9]),
+    applicationTypeName: cellText(row[10]) || undefined
   }));
 }
 
@@ -91,6 +93,7 @@ export function buildReportWorkbook(audits: RecordAudit[], requiredDocuments: Re
       { Metric: "Total Records", Value: completion.total },
       { Metric: "Complete Records", Value: completion.complete },
       { Metric: "Incomplete Records", Value: completion.incomplete },
+      { Metric: "Pending Records", Value: completion.pending },
       { Metric: "Completion Rate", Value: completion.completionRate }
     ]),
     "Dashboard"

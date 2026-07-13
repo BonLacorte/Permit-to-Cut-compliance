@@ -1,10 +1,15 @@
 import { ReportTable } from "@/components/report-table";
-import { getReportData } from "@/lib/data";
-import { displayApplicantName } from "@/lib/ptc";
+import { VersionFilter } from "@/components/version-filter";
+import { getReportData, getVersionContext } from "@/lib/data";
+import { displayApplicantName, formatDate } from "@/lib/ptc";
 
-export default async function MissingDocumentsPage() {
-  const { audits } = await getReportData();
+export default async function MissingDocumentsPage({ searchParams }: { searchParams?: { version?: string | string[] } }) {
+  const versionContext = await getVersionContext(searchParams?.version);
+  const { audits } = await getReportData({ versionId: versionContext.selectedVersionId });
   const rows = audits.filter((audit) => audit.missingCount > 0).map((audit) => ({
+    applicationHref: `/applications/${audit.id}`,
+    dateIssued: formatDate(audit.dateIssued),
+    ptcNumber: audit.ptcNumber || "",
     applicantName: displayApplicantName(audit),
     applicationTypeName: audit.applicationTypeName,
     missingCount: audit.missingCount,
@@ -14,14 +19,19 @@ export default async function MissingDocumentsPage() {
 
   return (
     <div className="grid">
-      <div>
-        <h1>Missing Documents</h1>
-        <p className="muted">Applicant-level follow-up list for incomplete records.</p>
+      <div className="topbar">
+        <div>
+          <h1>Missing Documents</h1>
+          <p className="muted">Applicant-level follow-up list for incomplete records.</p>
+        </div>
+        <VersionFilter options={versionContext.options} selected={versionContext.selectedVersionParam} path="/reports/missing-documents" />
       </div>
       <section className="panel">
         <ReportTable
           rows={rows}
           columns={[
+            { key: "dateIssued", label: "Date Issued", sortable: true },
+            { key: "ptcNumber", label: "PTC Number", sortable: true },
             { key: "applicantName", label: "Name", sortable: true },
             { key: "applicationTypeName", label: "Type of application", sortable: true },
             { key: "missingCount", label: "Missing Count", sortable: true, type: "number" },
@@ -29,6 +39,7 @@ export default async function MissingDocumentsPage() {
             { key: "selectedDocuments", label: "Selected Documents", type: "list" }
           ]}
           empty="No missing documents."
+          rowHrefKey="applicationHref"
         />
       </section>
     </div>

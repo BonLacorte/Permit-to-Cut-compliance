@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BulletList } from "@/components/bullet-list";
 
@@ -24,11 +25,13 @@ function renderValue(value: CellValue, type: Column<any>["type"]) {
 export function ReportTable<Row extends Record<string, CellValue>>({
   rows,
   columns,
-  empty = "No records found."
+  empty = "No records found.",
+  rowHrefKey
 }: {
   rows: Row[];
   columns: Column<Row>[];
   empty?: string;
+  rowHrefKey?: keyof Row & string;
 }) {
   const firstSortable = columns.find((column) => column.sortable)?.key || null;
   const [query, setQuery] = useState("");
@@ -86,11 +89,19 @@ export function ReportTable<Row extends Record<string, CellValue>>({
             </tr>
           </thead>
           <tbody>
-            {filtered.map((row, index) => (
-              <tr key={index}>
-                {columns.map((column) => <td key={column.key}>{renderValue(row[column.key], column.type)}</td>)}
-              </tr>
-            ))}
+            {filtered.map((row, index) => {
+              const rawHref = rowHrefKey ? row[rowHrefKey] : null;
+              const href = typeof rawHref === "string" ? rawHref : null;
+              return (
+                <tr key={index} className={href ? "clickable-row" : undefined}>
+                  {columns.map((column) => (
+                    <td key={column.key}>
+                      {href ? <Link className="table-row-link" href={href}>{renderValue(row[column.key], column.type)}</Link> : renderValue(row[column.key], column.type)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
             {filtered.length === 0 ? <tr><td colSpan={columns.length}>{empty}</td></tr> : null}
           </tbody>
         </table>

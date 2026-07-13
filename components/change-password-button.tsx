@@ -11,7 +11,7 @@ export function ChangePasswordButton() {
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)}>Change Password</button>
+      <button className="sidebar-action-button" type="button" onClick={() => setOpen(true)}>Change Password</button>
       {open ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
           <div className="modal compact-modal">

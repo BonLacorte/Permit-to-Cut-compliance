@@ -1,55 +1,23 @@
-import Link from "next/link";
-import { ExportExcelButton } from "@/components/export-excel-button";
-import { getReportData } from "@/lib/data";
+import { DashboardMetrics } from "@/components/dashboard-metrics";
+import { VersionFilter } from "@/components/version-filter";
+import { buildDashboardData } from "@/lib/dashboard";
+import { getReportData, getVersionContext } from "@/lib/data";
 
-export default async function DashboardPage() {
-  const report = await getReportData();
-  const topMissing = report.documents
-    .filter((doc) => doc.missingCount > 0)
-    .sort((a, b) => b.missingCount - a.missingCount)
-    .slice(0, 5);
+export default async function DashboardPage({ searchParams }: { searchParams?: { version?: string | string[] } }) {
+  const versionContext = await getVersionContext(searchParams?.version);
+  const report = await getReportData({ versionId: versionContext.selectedVersionId });
+  const dashboard = buildDashboardData(report.audits, report.requiredDocuments);
 
   return (
     <div className="grid">
-      <div>
-        <h1>Compliance Dashboard</h1>
-        <p className="muted">Live audit view powered by application records and required documents.</p>
+      <div className="topbar">
+        <div>
+          <h1>Compliance Dashboard</h1>
+          <p className="muted">Live audit view powered by application records, regional breakdowns, and required documents.</p>
+        </div>
+        <VersionFilter options={versionContext.options} selected={versionContext.selectedVersionParam} path="/dashboard" />
       </div>
-
-      <section className="grid cols-4">
-        <div className="card stat"><span>Total Records</span><strong>{report.completion.total}</strong></div>
-        <div className="card stat"><span>Complete Records</span><strong>{report.completion.complete}</strong></div>
-        <div className="card stat"><span>Incomplete Records</span><strong>{report.completion.incomplete}</strong></div>
-        <div className="card stat"><span>Completion Rate</span><strong>{Math.round(report.completion.completionRate * 100)}%</strong></div>
-      </section>
-
-      <section className="grid cols-2">
-        <div className="panel">
-          <h2>Top Missing Documents</h2>
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th>Document</th><th>Missing Count</th></tr></thead>
-              <tbody>
-                {topMissing.map((doc) => (
-                  <tr key={doc.requiredDocumentId}>
-                    <td>{doc.requiredDocumentName}</td>
-                    <td>{doc.missingCount}</td>
-                  </tr>
-                ))}
-                {topMissing.length === 0 ? <tr><td colSpan={2}>No missing documents yet.</td></tr> : null}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="panel">
-          <h2>Quick Actions</h2>
-          <div className="actions">
-            <Link className="button" href="/applications/new">New Application</Link>
-            <ExportExcelButton />
-          </div>
-        </div>
-      </section>
+      <DashboardMetrics data={dashboard} />
     </div>
   );
 }

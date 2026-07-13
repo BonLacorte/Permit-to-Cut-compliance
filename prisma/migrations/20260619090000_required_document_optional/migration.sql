@@ -1,0 +1,1 @@
+ALTER TABLE "required_documents" ADD COLUMN "optional" BOOLEAN NOT NULL DEFAULT false;

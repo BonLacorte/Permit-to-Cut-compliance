@@ -1,29 +1,48 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
+import type { VersionOption } from "@/components/document-picker";
 
 type ApplicationTypeOption = {
   id: string;
+  versionId: string;
   name: string;
-  documents: { id: string; name: string }[];
+  documents: { id: string; name: string; optional?: boolean }[];
 };
 
 export function EditSubmittedFiles({
   applicationTypes,
+  versionOptions,
+  initialVersionId,
   initialApplicationTypeId,
   initialDocumentIds
 }: {
   applicationTypes: ApplicationTypeOption[];
+  versionOptions: VersionOption[];
+  initialVersionId?: string | null;
   initialApplicationTypeId?: string | null;
   initialDocumentIds: string[];
 }) {
+  const [versionId, setVersionId] = useState(initialVersionId || UNCATEGORIZED_VERSION);
   const [applicationTypeId, setApplicationTypeId] = useState(initialApplicationTypeId || "");
   const [selectedDocumentIds, setSelectedDocumentIds] = useState(initialDocumentIds);
+  const isUncategorized = versionId === UNCATEGORIZED_VERSION;
 
-  const currentType = useMemo(
-    () => applicationTypes.find((type) => type.id === applicationTypeId),
-    [applicationTypes, applicationTypeId]
+  const versionedApplicationTypes = useMemo(
+    () => applicationTypes.filter((type) => type.versionId === versionId),
+    [applicationTypes, versionId]
   );
+  const currentType = useMemo(
+    () => versionedApplicationTypes.find((type) => type.id === applicationTypeId),
+    [versionedApplicationTypes, applicationTypeId]
+  );
+
+  function changeVersion(nextVersionId: string) {
+    setVersionId(nextVersionId);
+    setApplicationTypeId("");
+    setSelectedDocumentIds([]);
+  }
 
   function changeApplicationType(nextApplicationTypeId: string) {
     setApplicationTypeId(nextApplicationTypeId);
@@ -41,14 +60,23 @@ export function EditSubmittedFiles({
   return (
     <>
       <div className="field">
+        <label>Version</label>
+        <select name="versionId" value={versionId} onChange={(event) => changeVersion(event.target.value)}>
+          {versionOptions.map((version) => <option key={version.id} value={version.id}>{version.name}</option>)}
+        </select>
+        <span className="muted">Changing Version resets incompatible Type of Application and submitted files.</span>
+      </div>
+
+      <div className="field">
         <label>Type of application</label>
         <select
           name="applicationTypeId"
           value={applicationTypeId}
+          disabled={isUncategorized}
           onChange={(event) => changeApplicationType(event.target.value)}
         >
           <option value="">No type yet</option>
-          {applicationTypes.map((type) => (
+          {versionedApplicationTypes.map((type) => (
             <option key={type.id} value={type.id}>{type.name}</option>
           ))}
         </select>
@@ -61,7 +89,8 @@ export function EditSubmittedFiles({
           <span className="selected-count">{selectedDocumentIds.length} selected</span>
         </div>
         <div className="submitted-files-box">
-          {!currentType ? <div className="empty-state">Choose an application type later to select submitted files.</div> : null}
+          {isUncategorized ? <div className="empty-state">Assign a Version before selecting application type and submitted files.</div> : null}
+          {!isUncategorized && !currentType ? <div className="empty-state">Choose an application type later to select submitted files.</div> : null}
           {currentType?.documents.map((document) => {
             const checked = selectedDocumentIds.includes(document.id);
             return (
@@ -73,7 +102,7 @@ export function EditSubmittedFiles({
                   checked={checked}
                   onChange={() => toggleDocument(document.id)}
                 />
-                <span>{document.name}</span>
+                <span>{document.name}{document.optional ? <span className="badge neutral"> Optional</span> : null}</span>
               </label>
             );
           })}

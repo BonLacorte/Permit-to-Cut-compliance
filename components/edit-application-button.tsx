@@ -5,9 +5,12 @@ import { updateApplicationRecordAction } from "@/app/actions";
 import { EditSubmittedFiles, type ApplicationTypeOption } from "@/components/edit-submitted-files";
 import { PtcRecordFields } from "@/components/ptc-record-fields";
 import { SubmitButton } from "@/components/submit-button";
+import type { VersionOption } from "@/components/document-picker";
+import type { OfficeChoice } from "@/lib/ptc";
 
 type RecordDetails = {
   id: string;
+  versionId: string | null;
   applicantName: string;
   applicationTypeId: string | null;
   remarks: string;
@@ -22,9 +25,24 @@ type RecordDetails = {
   treesApplied?: number | null;
   treesApproved?: number | null;
   seedlingsReplacement?: number | null;
+  actualFee?: string | number | null;
+  recordedFee?: string | number | null;
+  replantedSeedlings?: boolean | null;
+  recommendingApproval?: string | null;
+  approved?: string | null;
 };
 
-export function EditApplicationButton({ record, applicationTypes }: { record: RecordDetails; applicationTypes: ApplicationTypeOption[] }) {
+export function EditApplicationButton({
+  record,
+  applicationTypes,
+  officeChoices,
+  versionOptions
+}: {
+  record: RecordDetails;
+  applicationTypes: ApplicationTypeOption[];
+  officeChoices: OfficeChoice[];
+  versionOptions: VersionOption[];
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -41,9 +59,11 @@ export function EditApplicationButton({ record, applicationTypes }: { record: Re
                 <label>Name of Applicant</label>
                 <input name="applicantName" defaultValue={record.applicantName} />
               </div>
-              <PtcRecordFields defaults={record} />
+              <PtcRecordFields defaults={record} officeChoices={officeChoices} />
               <EditSubmittedFiles
                 applicationTypes={applicationTypes}
+                versionOptions={versionOptions}
+                initialVersionId={record.versionId}
                 initialApplicationTypeId={record.applicationTypeId}
                 initialDocumentIds={record.selectedDocumentIds}
               />

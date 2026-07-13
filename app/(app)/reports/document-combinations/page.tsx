@@ -1,8 +1,10 @@
 import { ReportTable } from "@/components/report-table";
-import { getReportData } from "@/lib/data";
+import { VersionFilter } from "@/components/version-filter";
+import { getReportData, getVersionContext } from "@/lib/data";
 
-export default async function DocumentCombinationsPage() {
-  const { combinations } = await getReportData();
+export default async function DocumentCombinationsPage({ searchParams }: { searchParams?: { version?: string | string[] } }) {
+  const versionContext = await getVersionContext(searchParams?.version);
+  const { combinations } = await getReportData({ versionId: versionContext.selectedVersionId });
   const rows = combinations.map((row) => ({
     applicationTypeName: row.applicationTypeName,
     submittedCombination: row.documents,
@@ -13,9 +15,12 @@ export default async function DocumentCombinationsPage() {
 
   return (
     <div className="grid">
-      <div>
-        <h1>Document Combinations</h1>
-        <p className="muted">Common submitted-document combinations by application type.</p>
+      <div className="topbar">
+        <div>
+          <h1>Document Combinations</h1>
+          <p className="muted">Common submitted-document combinations by application type.</p>
+        </div>
+        <VersionFilter options={versionContext.options} selected={versionContext.selectedVersionParam} path="/reports/document-combinations" />
       </div>
       <section className="panel">
         <ReportTable

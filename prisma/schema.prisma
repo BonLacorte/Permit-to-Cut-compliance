@@ -21,24 +21,44 @@ model User {
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
   records      ApplicationRecord[] @relation("CreatedRecords")
+  editedRecords ApplicationRecord[] @relation("EditedRecords")
   progress     ProgressEntry[]
   activity     ActivityLog[]
 
   @@map("users")
 }
 
+model PtcVersion {
+  id               String              @id @default(cuid())
+  group            String              @default("PTC")
+  name             String
+  description      String?
+  active           Boolean             @default(true)
+  sortOrder        Int                 @default(0)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  applicationTypes ApplicationType[]
+  records          ApplicationRecord[]
+
+  @@unique([group, name])
+  @@map("ptc_versions")
+}
+
 model ApplicationType {
   id        String               @id @default(cuid())
   group     String               @default("PTC")
+  versionId String
   name      String
   active    Boolean              @default(true)
   sortOrder Int                  @default(0)
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
+  version   PtcVersion           @relation(fields: [versionId], references: [id])
   documents RequiredDocument[]
   records   ApplicationRecord[]
 
-  @@unique([group, name])
+  @@unique([versionId, name])
+  @@index([group])
   @@map("application_types")
 }
 
@@ -47,6 +67,7 @@ model RequiredDocument {
   applicationTypeId String
   name              String
   active            Boolean         @default(true)
+  optional          Boolean         @default(false)
   sortOrder         Int             @default(0)
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
@@ -57,9 +78,38 @@ model RequiredDocument {
   @@map("required_documents")
 }
 
+model RegionalOffice {
+  id                String             @id @default(cuid())
+  group             String             @default("PTC")
+  name              String
+  active            Boolean            @default(true)
+  sortOrder         Int                @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  provincialOffices ProvincialOffice[]
+
+  @@unique([group, name])
+  @@map("regional_offices")
+}
+
+model ProvincialOffice {
+  id               String         @id @default(cuid())
+  regionalOfficeId String
+  name             String
+  active           Boolean        @default(true)
+  sortOrder        Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  regionalOffice   RegionalOffice @relation(fields: [regionalOfficeId], references: [id])
+
+  @@unique([regionalOfficeId, name])
+  @@map("provincial_offices")
+}
+
 model ApplicationRecord {
   id                   String             @id @default(cuid())
   group                String             @default("PTC")
+  versionId            String?
   applicantName        String?
   applicationTypeId    String?
   remarks              String?
@@ -72,17 +122,27 @@ model ApplicationRecord {
   treesApplied         Int?
   treesApproved        Int?
   seedlingsReplacement Int?
+  actualFee            Decimal?           @db.Decimal(12, 2)
+  recordedFee          Decimal?           @db.Decimal(12, 2)
+  replantedSeedlings   Boolean?
+  recommendingApproval String?
+  approved             String?
   createdById          String
+  editedById           String?
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
+  version              PtcVersion?        @relation(fields: [versionId], references: [id])
   applicationType      ApplicationType?   @relation(fields: [applicationTypeId], references: [id])
   createdBy            User               @relation("CreatedRecords", fields: [createdById], references: [id])
+  editedBy             User?              @relation("EditedRecords", fields: [editedById], references: [id])
   progressEntries      ProgressEntry[]
   progressDocuments    ProgressDocument[]
 
   @@index([applicationTypeId])
+  @@index([versionId])
   @@index([group])
   @@index([ptcNumber])
+  @@index([editedById])
   @@map("application_records")
 }
 

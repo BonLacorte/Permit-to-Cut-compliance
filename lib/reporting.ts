@@ -1,21 +1,29 @@
-import { displayPtcField, formatDate } from "@/lib/ptc";
+import { displayPtcField, feesMatchDisplay, formatDate, formatFee, displayReplantedSeedlings, formatSignedFeeDifference } from "@/lib/ptc";
+
+export type AuditStatus = "Complete" | "Incomplete" | "Pending";
 
 export type RequiredDocumentRef = {
   id: string;
   name: string;
+  versionId?: string | null;
   applicationTypeId: string;
   applicationTypeName: string;
+  optional?: boolean;
 };
 
 export type RecordRef = {
   id: string;
   group?: string;
+  versionId?: string | null;
+  versionName?: string;
   applicantName: string;
   applicationTypeId: string | null;
+  applicationTypeVersionId?: string | null;
   applicationTypeName: string;
   selectedDocumentIds: string[];
   remarks?: string;
   createdByName?: string;
+  editedByName?: string;
   ptcNumber?: string | null;
   dateIssued?: Date | string | null;
   regionalOffice?: string | null;
@@ -25,6 +33,11 @@ export type RecordRef = {
   treesApplied?: number | null;
   treesApproved?: number | null;
   seedlingsReplacement?: number | null;
+  actualFee?: unknown;
+  recordedFee?: unknown;
+  replantedSeedlings?: boolean | null;
+  recommendingApproval?: string | null;
+  approved?: string | null;
   ptcNumberDuplicate?: boolean;
 };
 
@@ -32,37 +45,72 @@ export type RecordAudit = RecordRef & {
   requiredCount: number;
   submittedCount: number;
   missingCount: number;
-  status: "Complete" | "Incomplete";
+  status: AuditStatus;
   missingDocuments: RequiredDocumentRef[];
   selectedDocuments: RequiredDocumentRef[];
+  needsVersionReview: boolean;
+  versionReviewMessages: string[];
 };
 
-export function auditRecord(record: RecordRef, requiredDocuments: RequiredDocumentRef[]): RecordAudit {
+export function versionReviewMessages(record: RecordRef, requiredDocuments: RequiredDocumentRef[]) {
+  const messages: string[] = [];
+  if (!record.versionId) return messages;
+
   if (!record.applicationTypeId) {
+    messages.push("Version is assigned but Type of Application is blank.");
+    return messages;
+  }
+
+  if (record.applicationTypeVersionId && record.applicationTypeVersionId !== record.versionId) {
+    messages.push("Type of Application belongs to a different Version.");
+  }
+
+  const documentsForType = requiredDocuments.filter((doc) => doc.versionId === record.versionId && doc.applicationTypeId === record.applicationTypeId);
+  const allowedDocumentIds = new Set(documentsForType.map((doc) => doc.id));
+  const invalidDocumentCount = record.selectedDocumentIds.filter((documentId) => !allowedDocumentIds.has(documentId)).length;
+  if (invalidDocumentCount > 0) {
+    messages.push(`${invalidDocumentCount} submitted document${invalidDocumentCount === 1 ? "" : "s"} do not belong to the assigned Version and Type of Application.`);
+  }
+
+  return messages;
+}
+
+export function auditRecord(record: RecordRef, requiredDocuments: RequiredDocumentRef[]): RecordAudit {
+  const reviewMessages = versionReviewMessages(record, requiredDocuments);
+  const reviewBase = {
+    needsVersionReview: reviewMessages.length > 0,
+    versionReviewMessages: reviewMessages
+  };
+
+  if (!record.versionId || !record.applicationTypeId || record.applicationTypeVersionId && record.applicationTypeVersionId !== record.versionId) {
     return {
       ...record,
       requiredCount: 0,
       submittedCount: 0,
       missingCount: 0,
-      status: "Incomplete",
+      status: "Pending",
       missingDocuments: [],
-      selectedDocuments: []
+      selectedDocuments: [],
+      ...reviewBase
     };
   }
 
-  const requiredForType = requiredDocuments.filter((doc) => doc.applicationTypeId === record.applicationTypeId);
+  const documentsForType = requiredDocuments.filter((doc) => doc.versionId === record.versionId && doc.applicationTypeId === record.applicationTypeId);
+  const requiredForType = documentsForType.filter((doc) => !doc.optional);
   const selected = new Set(record.selectedDocumentIds);
-  const selectedDocuments = requiredForType.filter((doc) => selected.has(doc.id));
+  const selectedDocuments = documentsForType.filter((doc) => selected.has(doc.id));
+  const submittedRequiredDocuments = requiredForType.filter((doc) => selected.has(doc.id));
   const missingDocuments = requiredForType.filter((doc) => !selected.has(doc.id));
 
   return {
     ...record,
     requiredCount: requiredForType.length,
-    submittedCount: selectedDocuments.length,
+    submittedCount: submittedRequiredDocuments.length,
     missingCount: missingDocuments.length,
     status: missingDocuments.length === 0 ? "Complete" : "Incomplete",
     missingDocuments,
-    selectedDocuments
+    selectedDocuments,
+    ...reviewBase
   };
 }
 
@@ -73,41 +121,47 @@ export function auditRecords(records: RecordRef[], requiredDocuments: RequiredDo
 export function completionSummary(audits: RecordAudit[]) {
   const complete = audits.filter((audit) => audit.status === "Complete").length;
   const incomplete = audits.filter((audit) => audit.status === "Incomplete").length;
-  const total = complete + incomplete;
+  const pending = audits.filter((audit) => audit.status === "Pending").length;
+  const total = complete + incomplete + pending;
   return {
     complete,
     incomplete,
+    pending,
     total,
     completionRate: total === 0 ? 0 : complete / total
   };
 }
 
 export function applicationSummary(audits: RecordAudit[], requiredDocuments: RequiredDocumentRef[]) {
-  const applicationNames = Array.from(new Map(requiredDocuments.map((doc) => [doc.applicationTypeId, doc.applicationTypeName])));
+  const countedDocuments = requiredDocuments.filter((doc) => !doc.optional);
+  const applicationNames = Array.from(new Map([...countedDocuments.map((doc) => [doc.applicationTypeId, doc.applicationTypeName] as const), ...audits.filter((audit) => audit.applicationTypeId).map((audit) => [audit.applicationTypeId!, audit.applicationTypeName] as const)]));
   const summaries = applicationNames.map(([applicationTypeId, applicationTypeName]) => {
     const scoped = audits.filter((audit) => audit.applicationTypeId === applicationTypeId);
     const complete = scoped.filter((audit) => audit.status === "Complete").length;
-    const incomplete = scoped.length - complete;
+    const incomplete = scoped.filter((audit) => audit.status === "Incomplete").length;
+    const pending = scoped.filter((audit) => audit.status === "Pending").length;
     return {
       applicationTypeId,
       applicationTypeName,
       totalRecords: scoped.length,
       completeRecords: complete,
       incompleteRecords: incomplete,
+      pendingRecords: pending,
       completionRate: scoped.length === 0 ? 0 : complete / scoped.length,
-      requiredDocumentCount: requiredDocuments.filter((doc) => doc.applicationTypeId === applicationTypeId).length,
+      requiredDocumentCount: countedDocuments.filter((doc) => doc.applicationTypeId === applicationTypeId).length,
       missingDocumentInstances: scoped.reduce((sum, audit) => sum + audit.missingCount, 0)
     };
   });
 
-  const unclassified = audits.filter((audit) => !audit.applicationTypeId);
-  if (unclassified.length > 0) {
+  const pending = audits.filter((audit) => !audit.applicationTypeId);
+  if (pending.length > 0) {
     summaries.unshift({
       applicationTypeId: "",
-      applicationTypeName: "Unclassified",
-      totalRecords: unclassified.length,
+      applicationTypeName: "Pending",
+      totalRecords: pending.length,
       completeRecords: 0,
-      incompleteRecords: unclassified.length,
+      incompleteRecords: 0,
+      pendingRecords: pending.length,
       completionRate: 0,
       requiredDocumentCount: 0,
       missingDocumentInstances: 0
@@ -118,7 +172,7 @@ export function applicationSummary(audits: RecordAudit[], requiredDocuments: Req
 }
 
 export function documentSummary(audits: RecordAudit[], requiredDocuments: RequiredDocumentRef[]) {
-  return requiredDocuments.map((doc) => {
+  return requiredDocuments.filter((doc) => !doc.optional).map((doc) => {
     const scoped = audits.filter((audit) => audit.applicationTypeId === doc.applicationTypeId);
     const submittedCount = scoped.filter((audit) => audit.selectedDocumentIds.includes(doc.id)).length;
     const missingCount = scoped.length - submittedCount;
@@ -174,17 +228,26 @@ export function applicationExportRows(audits: RecordAudit[]) {
     "PTC Number": audit.ptcNumber || "",
     "Duplicate PTC Number": audit.ptcNumberDuplicate ? "Yes" : "No",
     "Name of Applicant": audit.applicantName,
-    "Type of application": audit.applicationTypeName,
+    "Version": audit.versionName || "Uncategorized",
+    "Needs Version Review": audit.needsVersionReview ? "Yes" : "No",
+    "Version Review Notes": audit.versionReviewMessages.join(" "),
     "Regional Office": displayPtcField(audit, "regionalOffice"),
     "Provincial Office": displayPtcField(audit, "provincialOffice"),
     Barangay: displayPtcField(audit, "barangay"),
     Municipality: displayPtcField(audit, "municipality"),
-    "No. of trees applied": displayPtcField(audit, "treesApplied"),
-    "No. of trees approved": displayPtcField(audit, "treesApproved"),
-    "No. of Seedlings Replacement": displayPtcField(audit, "seedlingsReplacement"),
+    "Type of application": audit.applicationTypeName,
     "Selected Documents": audit.selectedDocuments.map((doc) => doc.name).join(", "),
-    "Missing Count": audit.missingCount,
-    "Missing Documents": audit.missingDocuments.map((doc) => doc.name).join(", "),
-    Status: audit.status
+    Submitted: audit.submittedCount,
+    Missing: audit.missingCount,
+    "Actual Fee": formatFee(audit.actualFee),
+    "Recorded Fee": formatFee(audit.recordedFee),
+    "Fee Difference": formatSignedFeeDifference(audit),
+    "Fees Match": feesMatchDisplay(audit),
+    "Replanted Seedlings": displayReplantedSeedlings(audit.replantedSeedlings),
+    "Recommending Approval": audit.recommendingApproval || "",
+    Approved: audit.approved || "",
+    Status: audit.status,
+    Remarks: audit.remarks || "",
+    "Edited By": audit.editedByName || ""
   }));
 }

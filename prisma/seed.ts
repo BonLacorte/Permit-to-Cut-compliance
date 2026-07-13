@@ -4,7 +4,9 @@ import { Role } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { hashPassword } from "../lib/password";
 import { parseGroundsWorkbook } from "../lib/excel";
-import { PERMIT_GROUP_PTC } from "../lib/ptc";
+import { DEFAULT_PROVINCIAL_OFFICES_BY_REGION, PERMIT_GROUP_PTC } from "../lib/ptc";
+
+const DEFAULT_PTC_VERSION_ID = "ptc-version-2023-2024";
 
 async function main() {
   const workbookPath =
@@ -28,11 +30,24 @@ async function main() {
     create: { name: "Staff User", email: "staff@example.com", passwordHash: staffPassword, role: Role.STAFF }
   });
 
+  const defaultVersion = await prisma.ptcVersion.upsert({
+    where: { group_name: { group: PERMIT_GROUP_PTC, name: "2023 and 2024" } },
+    update: { active: true, sortOrder: 1 },
+    create: {
+      id: DEFAULT_PTC_VERSION_ID,
+      group: PERMIT_GROUP_PTC,
+      name: "2023 and 2024",
+      description: "Default PTC document set for 2023 and 2024 records.",
+      active: true,
+      sortOrder: 1
+    }
+  });
+
   for (const app of applicationTypes) {
     const applicationType = await prisma.applicationType.upsert({
-      where: { group_name: { group: PERMIT_GROUP_PTC, name: app.name } },
+      where: { versionId_name: { versionId: defaultVersion.id, name: app.name } },
       update: { active: true, sortOrder: app.sortOrder },
-      create: { group: PERMIT_GROUP_PTC, name: app.name, active: true, sortOrder: app.sortOrder }
+      create: { group: PERMIT_GROUP_PTC, versionId: defaultVersion.id, name: app.name, active: true, sortOrder: app.sortOrder }
     });
 
     for (const document of app.documents) {
@@ -49,7 +64,27 @@ async function main() {
     }
   }
 
-  console.log(`Seeded ${applicationTypes.length} application types and ${applicationTypes.reduce((sum, app) => sum + app.documents.length, 0)} documents.`);
+  for (const [regionName, provincialOffices] of Object.entries(DEFAULT_PROVINCIAL_OFFICES_BY_REGION)) {
+    const regionalOffice = await prisma.regionalOffice.upsert({
+      where: { group_name: { group: PERMIT_GROUP_PTC, name: regionName } },
+      update: { active: true },
+      create: { group: PERMIT_GROUP_PTC, name: regionName, active: true, sortOrder: 1 }
+    });
+
+    for (const [index, provincialOfficeName] of provincialOffices.entries()) {
+      await prisma.provincialOffice.upsert({
+        where: { regionalOfficeId_name: { regionalOfficeId: regionalOffice.id, name: provincialOfficeName } },
+        update: { active: true, sortOrder: index + 1 },
+        create: {
+          regionalOfficeId: regionalOffice.id,
+          name: provincialOfficeName,
+          active: true,
+          sortOrder: index + 1
+        }
+      });
+    }
+  }
+  console.log(`Seeded ${applicationTypes.length} application types and ${applicationTypes.reduce((sum, app) => sum + app.documents.length, 0)} documents into Version: ${defaultVersion.name}.`);
   console.log("Default users: admin@example.com / admin123 and staff@example.com / staff123");
 }
 
@@ -61,4 +96,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

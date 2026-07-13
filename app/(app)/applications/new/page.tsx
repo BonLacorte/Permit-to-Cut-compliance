@@ -2,10 +2,14 @@ import { createRecordAction } from "@/app/actions";
 import { DocumentPicker } from "@/components/document-picker";
 import { PtcRecordFields } from "@/components/ptc-record-fields";
 import { SubmitButton } from "@/components/submit-button";
-import { getApplicationTypesWithDocuments } from "@/lib/data";
+import { getApplicationTypesWithDocuments, getOfficeChoices, getVersionContext } from "@/lib/data";
 
-export default async function NewApplicationPage() {
-  const applicationTypes = await getApplicationTypesWithDocuments();
+export default async function NewApplicationPage({ searchParams }: { searchParams?: { version?: string } }) {
+  const versionContext = await getVersionContext(searchParams?.version);
+  const [applicationTypes, officeChoices] = await Promise.all([
+    getApplicationTypesWithDocuments(),
+    getOfficeChoices()
+  ]);
 
   return (
     <div className="grid">
@@ -19,8 +23,21 @@ export default async function NewApplicationPage() {
             <label htmlFor="applicantName">Name of Applicant</label>
             <input id="applicantName" name="applicantName" />
           </div>
-          <PtcRecordFields />
-          <DocumentPicker applicationTypes={applicationTypes} />
+          <PtcRecordFields officeChoices={officeChoices.map((office) => ({
+            id: office.id,
+            name: office.name,
+            provincialOffices: office.provincialOffices.map((provincial) => ({ id: provincial.id, name: provincial.name }))
+          }))} />
+          <DocumentPicker
+            applicationTypes={applicationTypes.map((type) => ({
+              id: type.id,
+              versionId: type.versionId,
+              name: type.name,
+              documents: type.documents.map((document) => ({ id: document.id, name: document.name, optional: document.optional }))
+            }))}
+            versionOptions={versionContext.options}
+            initialVersionId={versionContext.selectedVersionId}
+          />
           <div className="field">
             <label htmlFor="remarks">Remarks</label>
             <textarea id="remarks" name="remarks" rows={4} />

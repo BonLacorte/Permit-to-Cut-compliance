@@ -2,19 +2,25 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EditApplicationButton } from "@/components/edit-application-button";
 import { StatusBadge } from "@/components/status-badge";
-import { getApplicationTypesWithDocuments, getReportData } from "@/lib/data";
-import { displayApplicantName, displayPtcField, formatDate } from "@/lib/ptc";
+import { getApplicationTypesWithDocuments, getOfficeChoices, getReportData, getVersionContext } from "@/lib/data";
+import { displayApplicantName, displayPtcField, displayReplantedSeedlings, feesMatch, formatDate, formatFee, formatSignedFeeDifference } from "@/lib/ptc";
+import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
 import { prisma } from "@/lib/prisma";
 
 function metadataValue(value: string) {
   return value || <span className="muted">Blank</span>;
 }
 
+function formNumberValue(value: unknown) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
 export default async function ApplicationDetailPage({ params }: { params: { id: string } }) {
-  const [record, applicationTypes, report] = await Promise.all([
+  const [record, applicationTypes, officeChoices, report, versionContext] = await Promise.all([
     prisma.applicationRecord.findUnique({
       where: { id: params.id },
       include: {
+        version: true,
         applicationType: { include: { documents: { where: { active: true }, orderBy: { sortOrder: "asc" } } } },
         progressDocuments: { include: { requiredDocument: true } },
         progressEntries: {
@@ -24,7 +30,9 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
       }
     }),
     getApplicationTypesWithDocuments(),
-    getReportData()
+    getOfficeChoices(),
+    getReportData(),
+    getVersionContext()
   ]);
 
   if (!record) notFound();
@@ -33,19 +41,27 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
   const existingDocumentIds = record.progressDocuments.map((doc) => doc.requiredDocumentId);
   const applicationTypeOptions = applicationTypes.map((type) => ({
     id: type.id,
+    versionId: type.versionId,
     name: type.name,
-    documents: type.documents.map((document) => ({ id: document.id, name: document.name }))
+    documents: type.documents.map((document) => ({ id: document.id, name: document.name, optional: document.optional }))
+  }));
+  const officeOptions = officeChoices.map((office) => ({
+    id: office.id,
+    name: office.name,
+    provincialOffices: office.provincialOffices.map((provincial) => ({ id: provincial.id, name: provincial.name }))
   }));
   const applicantName = displayApplicantName(record);
   const dateIssued = formatDate(record.dateIssued);
+  const recordVersionParam = record.versionId || UNCATEGORIZED_VERSION;
 
   return (
     <div className="grid">
       <div className="topbar">
-        <Link className="button secondary" href="/applications">Back to Applications</Link>
+        <Link className="button secondary" href={`/applications?version=${recordVersionParam}`}>Back to Applications</Link>
         <EditApplicationButton
           record={{
             id: record.id,
+            versionId: record.versionId,
             applicantName: record.applicantName || "",
             applicationTypeId: record.applicationTypeId,
             remarks: record.remarks || "",
@@ -59,9 +75,16 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
             barangay: record.barangay || "",
             treesApplied: record.treesApplied,
             treesApproved: record.treesApproved,
-            seedlingsReplacement: record.seedlingsReplacement
+            seedlingsReplacement: record.seedlingsReplacement,
+            actualFee: formNumberValue(record.actualFee),
+            recordedFee: formNumberValue(record.recordedFee),
+            replantedSeedlings: record.replantedSeedlings,
+            recommendingApproval: record.recommendingApproval || "",
+            approved: record.approved || ""
           }}
           applicationTypes={applicationTypeOptions}
+          officeChoices={officeOptions}
+          versionOptions={versionContext.options}
         />
       </div>
 
@@ -70,6 +93,15 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
         <p className="muted">{record.applicationType?.name || "No type of application selected yet"}</p>
         {record.remarks ? <p>{record.remarks}</p> : null}
       </div>
+
+      {audit.needsVersionReview ? (
+        <section className="panel warning-panel">
+          <h2>Needs Version Review</h2>
+          <ul>
+            {audit.versionReviewMessages.map((message) => <li key={message}>{message}</li>)}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="grid cols-4">
         <div className="card stat"><span>Required</span><strong>{audit.requiredCount}</strong></div>
@@ -82,11 +114,12 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
         <div className="section-heading-row">
           <div>
             <h2>PTC Record Information</h2>
-            <p className="muted">Metadata for the application request. Blank tree counts are treated as 0.</p>
+            <p className="muted">Metadata for the application request. Blank counts and fees are treated as 0.</p>
           </div>
           {audit.ptcNumberDuplicate ? <span className="badge danger-badge">Duplicate PTC Number</span> : null}
         </div>
         <div className="metadata-grid">
+          <div><span>Version</span><strong>{record.version?.name || "Uncategorized"}</strong></div>
           <div><span>Date Issued</span><strong>{metadataValue(dateIssued)}</strong></div>
           <div><span>PTC Number</span><strong>{metadataValue(record.ptcNumber || "")}</strong></div>
           <div><span>Regional Office</span><strong>{metadataValue(displayPtcField(record, "regionalOffice"))}</strong></div>
@@ -96,6 +129,13 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
           <div><span>No. of trees applied</span><strong>{displayPtcField(record, "treesApplied")}</strong></div>
           <div><span>No. of trees approved</span><strong>{displayPtcField(record, "treesApproved")}</strong></div>
           <div><span>No. of Seedlings Replacement</span><strong>{displayPtcField(record, "seedlingsReplacement")}</strong></div>
+          <div><span>Actual Fee</span><strong>{formatFee(record.actualFee)}</strong></div>
+          <div><span>Recorded Fee</span><strong>{formatFee(record.recordedFee)}</strong></div>
+          <div><span>Fee Difference</span><strong>{formatSignedFeeDifference(record)}</strong></div>
+          <div><span>Fees Match</span><strong>{feesMatch(record) ? "Yes" : "No"}</strong></div>
+          <div><span>Replanted Seedlings</span><strong>{metadataValue(displayReplantedSeedlings(record.replantedSeedlings))}</strong></div>
+          <div><span>Recommending Approval</span><strong>{metadataValue(record.recommendingApproval || "")}</strong></div>
+          <div><span>Approved</span><strong>{metadataValue(record.approved || "")}</strong></div>
         </div>
       </section>
 
@@ -137,3 +177,4 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
     </div>
   );
 }
+

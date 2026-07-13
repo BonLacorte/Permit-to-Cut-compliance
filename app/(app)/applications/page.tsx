@@ -1,18 +1,31 @@
 import Link from "next/link";
 import { ApplicationsTable } from "@/components/applications-table";
+import { VersionFilter } from "@/components/version-filter";
 import { requireUser } from "@/lib/auth";
-import { getApplicationTypesWithDocuments, getReportData } from "@/lib/data";
-import { displayPtcField, formatDate } from "@/lib/ptc";
+import { getApplicationTypesWithDocuments, getOfficeChoices, getReportData, getVersionContext } from "@/lib/data";
+import { blankDisplay, decimalOrZero, displayPtcField, displayReplantedSeedlings, feesMatch, feeDifference, formatDate, formatFee, formatSignedFeeDifference } from "@/lib/ptc";
 
-export default async function ApplicationsPage() {
-  const [user, { audits }, applicationTypes] = await Promise.all([
+function formNumberValue(value: unknown) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+export default async function ApplicationsPage({ searchParams }: { searchParams?: { version?: string } }) {
+  const versionContext = await getVersionContext(searchParams?.version);
+  const [user, selectedReport, allVersionsReport, applicationTypes, officeChoices] = await Promise.all([
     requireUser(),
+    getReportData({ versionId: versionContext.selectedVersionId }),
     getReportData(),
-    getApplicationTypesWithDocuments()
+    getApplicationTypesWithDocuments(),
+    getOfficeChoices()
   ]);
+  const { audits } = selectedReport;
 
   const rows = audits.map((audit) => ({
     id: audit.id,
+    versionId: audit.versionId || null,
+    versionName: audit.versionName || "Uncategorized",
+    needsVersionReview: audit.needsVersionReview,
+    versionReviewMessages: audit.versionReviewMessages,
     applicantName: audit.applicantName || "",
     applicationTypeId: audit.applicationTypeId,
     applicationTypeName: audit.applicationTypeName,
@@ -23,23 +36,33 @@ export default async function ApplicationsPage() {
     selectedDocuments: audit.selectedDocuments.map((doc) => doc.name),
     selectedDocumentIds: audit.selectedDocuments.map((doc) => doc.id),
     remarks: audit.remarks || "",
-    createdByName: audit.createdByName || "Unknown",
+    editedByName: audit.editedByName || "",
     dateIssued: formatDate(audit.dateIssued),
     ptcNumber: audit.ptcNumber || "",
     regionalOffice: audit.regionalOffice || "",
     provincialOffice: audit.provincialOffice || "",
     municipality: audit.municipality || "",
     barangay: audit.barangay || "",
-    regionalOfficeDisplay: displayPtcField(audit, "regionalOffice"),
-    provincialOfficeDisplay: displayPtcField(audit, "provincialOffice"),
+    regionalOfficeDisplay: blankDisplay(audit.regionalOffice),
+    provincialOfficeDisplay: blankDisplay(audit.provincialOffice),
     municipalityDisplay: displayPtcField(audit, "municipality"),
     barangayDisplay: displayPtcField(audit, "barangay"),
     treesApplied: audit.treesApplied ?? null,
     treesApproved: audit.treesApproved ?? null,
     seedlingsReplacement: audit.seedlingsReplacement ?? null,
-    treesAppliedDisplay: displayPtcField(audit, "treesApplied"),
-    treesApprovedDisplay: displayPtcField(audit, "treesApproved"),
-    seedlingsReplacementDisplay: displayPtcField(audit, "seedlingsReplacement"),
+    actualFee: formNumberValue(audit.actualFee),
+    recordedFee: formNumberValue(audit.recordedFee),
+    actualFeeAmount: decimalOrZero(audit.actualFee),
+    recordedFeeAmount: decimalOrZero(audit.recordedFee),
+    feeDifferenceAmount: feeDifference(audit),
+    actualFeeDisplay: formatFee(audit.actualFee),
+    recordedFeeDisplay: formatFee(audit.recordedFee),
+    feeDifferenceDisplay: formatSignedFeeDifference(audit),
+    replantedSeedlings: audit.replantedSeedlings ?? null,
+    feesMatchDisplay: feesMatch(audit) ? "Yes" : "No",
+    replantedSeedlingsDisplay: displayReplantedSeedlings(audit.replantedSeedlings),
+    recommendingApproval: audit.recommendingApproval || "",
+    approved: audit.approved || "",
     ptcNumberDuplicate: !!audit.ptcNumberDuplicate
   }));
 
@@ -50,19 +73,35 @@ export default async function ApplicationsPage() {
           <h1>PTC Applications</h1>
           <p className="muted">Applicant records with PTC metadata, submitted documents, and missing documents.</p>
         </div>
-        <Link className="button" href="/applications/new">New Application</Link>
+        <div className="actions">
+          <VersionFilter path="/applications" selected={versionContext.selectedVersionParam} options={versionContext.options} />
+          <Link className="button" href={`/applications/new?version=${versionContext.selectedVersionParam}`}>New Application</Link>
+        </div>
       </div>
       <section className="panel">
         <ApplicationsTable
           rows={rows}
+          allVersionRecordCount={allVersionsReport.completion.total}
           canBulkDelete={user.role === "ADMIN"}
+          versionOptions={versionContext.options}
+          selectedVersionParam={versionContext.selectedVersionParam}
+          officeChoices={officeChoices.map((office) => ({
+            id: office.id,
+            name: office.name,
+            provincialOffices: office.provincialOffices.map((provincial) => ({ id: provincial.id, name: provincial.name }))
+          }))}
           applicationTypes={applicationTypes.map((type) => ({
             id: type.id,
+            versionId: type.versionId,
             name: type.name,
-            documents: type.documents.map((document) => ({ id: document.id, name: document.name }))
+            documents: type.documents.map((document) => ({ id: document.id, name: document.name, optional: document.optional }))
           }))}
         />
       </section>
     </div>
   );
 }
+
+
+
+
