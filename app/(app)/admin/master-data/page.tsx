@@ -34,6 +34,21 @@ import { VersionFilter } from "@/components/version-filter";
 import { requireAdmin } from "@/lib/auth";
 import { getApplicationTypesWithDocuments, getDeactivatedMasterData, getOfficeChoices, getVersionContext } from "@/lib/data";
 
+function requirementBadge(requirementMode: string) {
+  if (requirementMode === "Optional") return <span className="badge neutral">Optional</span>;
+  if (requirementMode === "LocConditional") return <span className="badge neutral">LOC Conditional</span>;
+  return null;
+}
+
+function RequirementModeSelect({ defaultValue = "Required", disabled = false }: { defaultValue?: string; disabled?: boolean }) {
+  return (
+    <select name="requirementMode" defaultValue={defaultValue} disabled={disabled}>
+      <option value="Required">Required</option>
+      <option value="Optional">Optional</option>
+      <option value="LocConditional">Conditional on LOC Exemption</option>
+    </select>
+  );
+}
 export default async function MasterDataPage({ searchParams }: { searchParams?: { version?: string } }) {
   await requireAdmin();
   const versionContext = await getVersionContext(searchParams?.version);
@@ -156,10 +171,10 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
             <label htmlFor="docName">Type of document</label>
             <input id="docName" name="name" required disabled={!selectedVersionId} />
           </div>
-          <label className="checkbox-row">
-            <input name="optional" type="checkbox" disabled={!selectedVersionId} />
-            <span>Optional document</span>
-          </label>
+          <div className="field">
+            <label htmlFor="requirementMode">Requirement</label>
+            <RequirementModeSelect disabled={!selectedVersionId} />
+          </div>
           <SubmitButton pendingText="Adding document..." disabled={!selectedVersionId}>Add Document</SubmitButton>
         </form>
       </section>
@@ -186,13 +201,10 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
                         <form action={updateRequiredDocumentAction} className="inline-edit-form">
                           <input type="hidden" name="id" value={doc.id} />
                           <input name="name" defaultValue={doc.name} required />
-                          <label className="inline-checkbox">
-                            <input name="optional" type="checkbox" defaultChecked={doc.optional} />
-                            <span>Optional</span>
-                          </label>
+                          <RequirementModeSelect defaultValue={doc.requirementMode} />
                           <SubmitButton className="button secondary" pendingText="Saving...">Save</SubmitButton>
                         </form>
-                        {doc.optional ? <span className="badge neutral">Optional</span> : null}
+                        {requirementBadge(doc.requirementMode)}
                         <ConfirmDeleteForm
                           action={deleteRequiredDocumentAction}
                           fields={[{ name: "id", value: doc.id }]}
@@ -340,7 +352,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
             {deactivated.requiredDocuments.map((doc) => (
               <tr key={`required-document-${doc.id}`}>
                 <td>Type of Document</td>
-                <td>{doc.name}{doc.optional ? <span className="badge neutral">Optional</span> : null}</td>
+                <td>{doc.name}{requirementBadge(doc.requirementMode)}</td>
                 <td>{doc.applicationType.name} / {doc.applicationType.version.name}{doc.applicationType.active ? "" : " (application type inactive)"}</td>
                 <td>
                   <div className="actions">
@@ -377,9 +389,9 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
           <div className="instruction-box">
             <p><strong>Expected first-sheet column order:</strong></p>
             <ol>
-              <li>Regional Office</li><li>Provincial Office</li><li>PTC Number</li><li>Date Issued</li><li>Name of Applicant</li><li>Barangay</li><li>Municipality</li><li>No. of trees applied</li><li>No. of trees approved</li><li>No. of Seedlings Replacement</li><li>Type of Application (optional)</li>
+              <li>Regional Office</li><li>Provincial Office</li><li>PTC Number</li><li>Date Issued</li><li>Name of Applicant</li><li>Barangay</li><li>Municipality</li><li>No. of trees applied</li><li>No. of trees approved</li><li>No. of Seedlings Replacement</li><li>Type of Application (optional)</li><li>LOC Exemption (optional: Owner or Others)</li>
             </ol>
-            <p className="muted">Rows import into the selected Version. If the optional Type of Application column is present, it is matched only inside that Version.</p>
+            <p className="muted">Rows import into the selected Version. If optional Type of Application and LOC Exemption columns are present, the type is matched only inside that Version and LOC Exemption accepts Owner or Others.</p>
           </div>
           <div className="field">
             <label htmlFor="importVersionId">Import Version</label>

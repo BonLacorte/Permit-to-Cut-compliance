@@ -13,6 +13,7 @@ export type ParsedPtcRecord = {
   treesApproved?: number;
   seedlingsReplacement?: number;
   applicationTypeName?: string;
+  locExemption?: "Owner" | "Others";
 };
 
 export function parseGroundsWorkbook(buffer: Buffer) {
@@ -47,6 +48,13 @@ function parseNumberCell(value: unknown) {
   return Number.isFinite(parsed) ? Math.trunc(parsed) : undefined;
 }
 
+
+function parseLocExemptionCell(value: unknown) {
+  const text = cellText(value).toLowerCase();
+  if (text === "owner") return "Owner";
+  if (text === "others") return "Others";
+  return undefined;
+}
 function parseDateCell(value: unknown) {
   if (value === null || value === undefined || value === "") return undefined;
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
@@ -76,7 +84,8 @@ export function parsePtcRecordsWorkbook(buffer: Buffer): ParsedPtcRecord[] {
     treesApplied: parseNumberCell(row[7]),
     treesApproved: parseNumberCell(row[8]),
     seedlingsReplacement: parseNumberCell(row[9]),
-    applicationTypeName: cellText(row[10]) || undefined
+    applicationTypeName: cellText(row[10]) || undefined,
+    locExemption: parseLocExemptionCell(row[11])
   }));
 }
 

@@ -1,6 +1,8 @@
 import { displayPtcField, feesMatchDisplay, formatDate, formatFee, displayReplantedSeedlings, formatSignedFeeDifference } from "@/lib/ptc";
 
 export type AuditStatus = "Complete" | "Incomplete" | "Pending";
+export type LocExemptionValue = "Owner" | "Others" | null | undefined;
+export type DocumentRequirementMode = "Required" | "Optional" | "LocConditional";
 
 export type RequiredDocumentRef = {
   id: string;
@@ -8,7 +10,7 @@ export type RequiredDocumentRef = {
   versionId?: string | null;
   applicationTypeId: string;
   applicationTypeName: string;
-  optional?: boolean;
+  requirementMode?: DocumentRequirementMode;
 };
 
 export type RecordRef = {
@@ -36,6 +38,7 @@ export type RecordRef = {
   actualFee?: unknown;
   recordedFee?: unknown;
   replantedSeedlings?: boolean | null;
+  locExemption?: LocExemptionValue;
   recommendingApproval?: string | null;
   approved?: string | null;
   ptcNumberDuplicate?: boolean;
@@ -51,6 +54,17 @@ export type RecordAudit = RecordRef & {
   needsVersionReview: boolean;
   versionReviewMessages: string[];
 };
+
+function requirementMode(doc: RequiredDocumentRef) {
+  return doc.requirementMode || "Required";
+}
+
+export function isDocumentRequiredForRecord(doc: RequiredDocumentRef, record: Pick<RecordRef, "locExemption">) {
+  const mode = requirementMode(doc);
+  if (mode === "Optional") return false;
+  if (mode === "LocConditional") return record.locExemption === "Others";
+  return true;
+}
 
 export function versionReviewMessages(record: RecordRef, requiredDocuments: RequiredDocumentRef[]) {
   const messages: string[] = [];
@@ -96,7 +110,7 @@ export function auditRecord(record: RecordRef, requiredDocuments: RequiredDocume
   }
 
   const documentsForType = requiredDocuments.filter((doc) => doc.versionId === record.versionId && doc.applicationTypeId === record.applicationTypeId);
-  const requiredForType = documentsForType.filter((doc) => !doc.optional);
+  const requiredForType = documentsForType.filter((doc) => isDocumentRequiredForRecord(doc, record));
   const selected = new Set(record.selectedDocumentIds);
   const selectedDocuments = documentsForType.filter((doc) => selected.has(doc.id));
   const submittedRequiredDocuments = requiredForType.filter((doc) => selected.has(doc.id));
@@ -133,7 +147,7 @@ export function completionSummary(audits: RecordAudit[]) {
 }
 
 export function applicationSummary(audits: RecordAudit[], requiredDocuments: RequiredDocumentRef[]) {
-  const countedDocuments = requiredDocuments.filter((doc) => !doc.optional);
+  const countedDocuments = requiredDocuments.filter((doc) => requirementMode(doc) !== "Optional");
   const applicationNames = Array.from(new Map([...countedDocuments.map((doc) => [doc.applicationTypeId, doc.applicationTypeName] as const), ...audits.filter((audit) => audit.applicationTypeId).map((audit) => [audit.applicationTypeId!, audit.applicationTypeName] as const)]));
   const summaries = applicationNames.map(([applicationTypeId, applicationTypeName]) => {
     const scoped = audits.filter((audit) => audit.applicationTypeId === applicationTypeId);
@@ -172,8 +186,8 @@ export function applicationSummary(audits: RecordAudit[], requiredDocuments: Req
 }
 
 export function documentSummary(audits: RecordAudit[], requiredDocuments: RequiredDocumentRef[]) {
-  return requiredDocuments.filter((doc) => !doc.optional).map((doc) => {
-    const scoped = audits.filter((audit) => audit.applicationTypeId === doc.applicationTypeId);
+  return requiredDocuments.filter((doc) => requirementMode(doc) !== "Optional").map((doc) => {
+    const scoped = audits.filter((audit) => audit.applicationTypeId === doc.applicationTypeId && isDocumentRequiredForRecord(doc, audit));
     const submittedCount = scoped.filter((audit) => audit.selectedDocumentIds.includes(doc.id)).length;
     const missingCount = scoped.length - submittedCount;
     return {
@@ -236,6 +250,7 @@ export function applicationExportRows(audits: RecordAudit[]) {
     Barangay: displayPtcField(audit, "barangay"),
     Municipality: displayPtcField(audit, "municipality"),
     "Type of application": audit.applicationTypeName,
+    "LOC Exemption": audit.locExemption || "",
     "Selected Documents": audit.selectedDocuments.map((doc) => doc.name).join(", "),
     Submitted: audit.submittedCount,
     Missing: audit.missingCount,

@@ -24,6 +24,7 @@ export type PtcDisplayRecord = {
   actualFee?: unknown;
   recordedFee?: unknown;
   replantedSeedlings?: boolean | null;
+  locExemption?: "Owner" | "Others" | null;
   recommendingApproval?: string | null;
   approved?: string | null;
 };
@@ -83,6 +84,10 @@ export function displayReplantedSeedlings(value?: boolean | null) {
   return "";
 }
 
+export function displayLocExemption(value?: "Owner" | "Others" | null) {
+  return value || "";
+}
+
 export function blankDisplay(value?: string | null, fallback = "") {
   return String(value || "").trim() || fallback;
 }
@@ -101,5 +106,6 @@ export function displayPtcField(record: PtcDisplayRecord, key: keyof PtcDisplayR
   }
   if (key === "actualFee" || key === "recordedFee") return formatFee(value);
   if (key === "replantedSeedlings") return displayReplantedSeedlings(value as boolean | null | undefined);
+  if (key === "locExemption") return displayLocExemption(value as "Owner" | "Others" | null | undefined);
   return blankDisplay(value as string | null | undefined);
 }

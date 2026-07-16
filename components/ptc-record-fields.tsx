@@ -18,6 +18,7 @@ type PtcRecordFieldsProps = {
     actualFee?: string | number | null;
     recordedFee?: string | number | null;
     replantedSeedlings?: boolean | null;
+    locExemption?: "Owner" | "Others" | null;
     recommendingApproval?: string | null;
     approved?: string | null;
   };
@@ -99,6 +100,14 @@ export function PtcRecordFields({ defaults, officeChoices }: PtcRecordFieldsProp
             <option value="">Blank</option>
             <option value="true">Yes</option>
             <option value="false">No</option>
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="locExemption">LOC Exemption</label>
+          <select id="locExemption" name="locExemption" defaultValue={defaults?.locExemption || ""}>
+            <option value="">Blank</option>
+            <option value="Owner">Owner</option>
+            <option value="Others">Others</option>
           </select>
         </div>
         <div className="field">

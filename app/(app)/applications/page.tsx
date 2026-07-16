@@ -3,7 +3,7 @@ import { ApplicationsTable } from "@/components/applications-table";
 import { VersionFilter } from "@/components/version-filter";
 import { requireUser } from "@/lib/auth";
 import { getApplicationTypesWithDocuments, getOfficeChoices, getReportData, getVersionContext } from "@/lib/data";
-import { blankDisplay, decimalOrZero, displayPtcField, displayReplantedSeedlings, feesMatch, feeDifference, formatDate, formatFee, formatSignedFeeDifference } from "@/lib/ptc";
+import { blankDisplay, decimalOrZero, displayPtcField, displayLocExemption, displayReplantedSeedlings, feesMatch, feeDifference, formatDate, formatFee, formatSignedFeeDifference } from "@/lib/ptc";
 
 function formNumberValue(value: unknown) {
   return value === null || value === undefined ? "" : String(value);
@@ -59,6 +59,8 @@ export default async function ApplicationsPage({ searchParams }: { searchParams?
     recordedFeeDisplay: formatFee(audit.recordedFee),
     feeDifferenceDisplay: formatSignedFeeDifference(audit),
     replantedSeedlings: audit.replantedSeedlings ?? null,
+    locExemption: audit.locExemption || null,
+    locExemptionDisplay: displayLocExemption(audit.locExemption),
     feesMatchDisplay: feesMatch(audit) ? "Yes" : "No",
     replantedSeedlingsDisplay: displayReplantedSeedlings(audit.replantedSeedlings),
     recommendingApproval: audit.recommendingApproval || "",
@@ -68,12 +70,10 @@ export default async function ApplicationsPage({ searchParams }: { searchParams?
 
   return (
     <div className="grid">
-      <div className="topbar">
-        <div>
-          <h1>PTC Applications</h1>
-          <p className="muted">Applicant records with PTC metadata, submitted documents, and missing documents.</p>
-        </div>
-        <div className="actions">
+      <div>
+        <h1>PTC Applications</h1>
+        <p className="muted">Applicant records with PTC metadata, submitted documents, and missing documents.</p>
+        <div className="actions page-title-actions">
           <VersionFilter path="/applications" selected={versionContext.selectedVersionParam} options={versionContext.options} />
           <Link className="button" href={`/applications/new?version=${versionContext.selectedVersionParam}`}>New Application</Link>
         </div>
@@ -94,7 +94,7 @@ export default async function ApplicationsPage({ searchParams }: { searchParams?
             id: type.id,
             versionId: type.versionId,
             name: type.name,
-            documents: type.documents.map((document) => ({ id: document.id, name: document.name, optional: document.optional }))
+            documents: type.documents.map((document) => ({ id: document.id, name: document.name, requirementMode: document.requirementMode }))
           }))}
         />
       </section>

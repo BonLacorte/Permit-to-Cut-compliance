@@ -51,6 +51,8 @@ type Row = {
   recordedFeeDisplay: string;
   feeDifferenceDisplay: string;
   replantedSeedlings: boolean | null;
+  locExemption: "Owner" | "Others" | null;
+  locExemptionDisplay: string;
   feesMatchDisplay: string;
   replantedSeedlingsDisplay: string;
   recommendingApproval: string;
@@ -58,7 +60,7 @@ type Row = {
   ptcNumberDuplicate: boolean;
 };
 
-type SortKey = "versionName" | "applicantName" | "applicationTypeName" | "submittedCount" | "missingCount" | "status" | "editedByName" | "remarks" | "dateIssued" | "ptcNumber" | "regionalOffice" | "provincialOffice" | "municipality" | "barangay" | "actualFeeAmount" | "recordedFeeAmount" | "feeDifferenceAmount" | "recommendingApproval" | "approved";
+type SortKey = "versionName" | "applicantName" | "applicationTypeName" | "submittedCount" | "missingCount" | "status" | "editedByName" | "remarks" | "dateIssued" | "ptcNumber" | "regionalOffice" | "provincialOffice" | "municipality" | "barangay" | "actualFeeAmount" | "recordedFeeAmount" | "feeDifferenceAmount" | "locExemptionDisplay" | "recommendingApproval" | "approved";
 
 function compareRows(a: Row, b: Row, key: SortKey) {
   const left = a[key];
@@ -132,6 +134,7 @@ export function ApplicationsTable({
             row.barangayDisplay,
             row.feesMatchDisplay,
             row.replantedSeedlingsDisplay,
+            row.locExemptionDisplay,
             row.feeDifferenceDisplay,
             row.recommendingApproval,
             row.approved,
@@ -153,7 +156,7 @@ export function ApplicationsTable({
   const selectedRows = useMemo(() => rows.filter((row) => selectedIds.has(row.id)), [rows, selectedIds]);
   const allVisibleSelected = visible.length > 0 && visible.every((row) => selectedIds.has(row.id));
   const someVisibleSelected = visible.some((row) => selectedIds.has(row.id));
-    const tableColSpan = canBulkDelete ? 24 : 23;
+    const tableColSpan = canBulkDelete ? 25 : 24;
   const activeAssignmentOptions = versionOptions.filter((version) => version.id === "uncategorized" || version.active !== false);
   const bulkPreview = useMemo(() => {
     const targetIsUncategorized = bulkVersionId === "uncategorized";
@@ -259,6 +262,7 @@ export function ApplicationsTable({
               <th><button className="th-button" onClick={() => sortBy("municipality")}>Municipality{sortLabel("municipality")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("barangay")}>Barangay{sortLabel("barangay")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("applicationTypeName")}>Type of application{sortLabel("applicationTypeName")}</button></th>
+              <th><button className="th-button" onClick={() => sortBy("locExemptionDisplay")}>LOC Exemption{sortLabel("locExemptionDisplay")}</button></th>
               <th>Submitted Documents</th>
               <th><button className="th-button" onClick={() => sortBy("submittedCount")}>Submitted{sortLabel("submittedCount")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("missingCount")}>Missing{sortLabel("missingCount")}</button></th>
@@ -290,6 +294,7 @@ export function ApplicationsTable({
                 <td>{displayText(row.municipalityDisplay)}</td>
                 <td>{displayText(row.barangayDisplay)}</td>
                 <td>{row.applicationTypeName}</td>
+                <td>{displayText(row.locExemptionDisplay)}</td>
                 <td><BulletList items={row.selectedDocuments} empty="No documents selected" /></td>
                 <td>{row.submittedCount} / {row.requiredCount}</td>
                 <td>{row.missingCount}</td>

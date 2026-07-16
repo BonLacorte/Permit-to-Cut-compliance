@@ -173,7 +173,7 @@ export async function getReportData(options: VersionScopedOptions = {}) {
     versionId: doc.applicationType.versionId,
     applicationTypeId: doc.applicationTypeId,
     applicationTypeName: doc.applicationType.name,
-    optional: doc.optional
+    requirementMode: doc.requirementMode
   }));
 
   const recordRefs = records.map((record) => ({
@@ -201,6 +201,7 @@ export async function getReportData(options: VersionScopedOptions = {}) {
     actualFee: record.actualFee,
     recordedFee: record.recordedFee,
     replantedSeedlings: record.replantedSeedlings,
+    locExemption: record.locExemption,
     recommendingApproval: record.recommendingApproval,
     approved: record.approved,
     ptcNumberDuplicate: !!record.ptcNumber && duplicatePtcNumbers.has(record.ptcNumber)

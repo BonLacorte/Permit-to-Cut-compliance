@@ -1,6 +1,6 @@
 "use server";
 
-import { Role } from "@prisma/client";
+import { DocumentRequirementMode, LocExemption, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -75,6 +75,19 @@ function nullableBoolean(value: FormDataEntryValue | null) {
   if (text === "false") return false;
   return null;
 }
+function nullableLocExemption(value: FormDataEntryValue | null) {
+  const text = String(value || "").trim();
+  if (text === "Owner") return LocExemption.Owner;
+  if (text === "Others") return LocExemption.Others;
+  return null;
+}
+
+function documentRequirementMode(value: FormDataEntryValue | null) {
+  const text = String(value || "").trim();
+  if (text === "Optional") return DocumentRequirementMode.Optional;
+  if (text === "LocConditional") return DocumentRequirementMode.LocConditional;
+  return DocumentRequirementMode.Required;
+}
 
 function nullableDate(value: FormDataEntryValue | null) {
   const text = optionalString(value);
@@ -103,6 +116,7 @@ function ptcRecordData(formData: FormData) {
     actualFee: nullableDecimal(formData.get("actualFee")),
     recordedFee: nullableDecimal(formData.get("recordedFee")),
     replantedSeedlings: nullableBoolean(formData.get("replantedSeedlings")),
+    locExemption: nullableLocExemption(formData.get("locExemption")),
     recommendingApproval: nullableString(formData.get("recommendingApproval")),
     approved: nullableString(formData.get("approved"))
   };
@@ -718,7 +732,7 @@ export async function clonePtcVersionAction(formData: FormData) {
             applicationTypeId: clonedType.id,
             name: document.name,
             active: true,
-            optional: document.optional,
+            requirementMode: document.requirementMode,
             sortOrder: document.sortOrder
           }))
         });
@@ -817,14 +831,14 @@ export async function createRequiredDocumentAction(formData: FormData) {
   await requireAdmin();
   const applicationTypeId = String(formData.get("applicationTypeId") || "");
   const name = String(formData.get("name") || "").trim();
-  const optional = formData.get("optional") === "on";
+  const requirementMode = documentRequirementMode(formData.get("requirementMode"));
   if (!applicationTypeId || !name) redirectWithToast("/admin/master-data", "error", "Application type and document name are required.");
 
   try {
     const applicationType = await prisma.applicationType.findFirst({ where: { id: applicationTypeId, group: PERMIT_GROUP_PTC } });
     if (!applicationType) redirectWithToast("/admin/master-data", "error", "Application type was not found.");
     const count = await prisma.requiredDocument.count({ where: { applicationTypeId } });
-    await prisma.requiredDocument.upsert({ where: { applicationTypeId_name: { applicationTypeId, name } }, update: { active: true, optional }, create: { applicationTypeId, name, optional, sortOrder: count + 1 } });
+    await prisma.requiredDocument.upsert({ where: { applicationTypeId_name: { applicationTypeId, name } }, update: { active: true, requirementMode }, create: { applicationTypeId, name, requirementMode, sortOrder: count + 1 } });
   } catch {
     redirectWithToast("/admin/master-data", "error", "Could not add the required document. It may already exist.");
   }
@@ -875,11 +889,11 @@ export async function updateRequiredDocumentAction(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
-  const optional = formData.get("optional") === "on";
+  const requirementMode = documentRequirementMode(formData.get("requirementMode"));
   if (!id || !name) redirectWithToast("/admin/master-data", "error", "Document name is required.");
 
   try {
-    await prisma.requiredDocument.update({ where: { id }, data: { name, optional, active: true } });
+    await prisma.requiredDocument.update({ where: { id }, data: { name, requirementMode, active: true } });
   } catch {
     redirectWithToast("/admin/master-data", "error", "Could not update the required document. The name may already exist.");
   }
@@ -1278,7 +1292,8 @@ export async function importPtcRecordsAction(formData: FormData) {
       municipality: record.municipality || null,
       treesApplied: record.treesApplied ?? null,
       treesApproved: record.treesApproved ?? null,
-      seedlingsReplacement: record.seedlingsReplacement ?? null
+      seedlingsReplacement: record.seedlingsReplacement ?? null,
+      locExemption: record.locExemption ?? null
     };
   });
 

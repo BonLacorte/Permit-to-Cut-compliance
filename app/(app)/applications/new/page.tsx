@@ -33,7 +33,7 @@ export default async function NewApplicationPage({ searchParams }: { searchParam
               id: type.id,
               versionId: type.versionId,
               name: type.name,
-              documents: type.documents.map((document) => ({ id: document.id, name: document.name, optional: document.optional }))
+              documents: type.documents.map((document) => ({ id: document.id, name: document.name, requirementMode: document.requirementMode }))
             }))}
             versionOptions={versionContext.options}
             initialVersionId={versionContext.selectedVersionId}

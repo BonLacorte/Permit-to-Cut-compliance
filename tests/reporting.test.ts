@@ -93,7 +93,7 @@ describe("reporting logic", () => {
   it("keeps optional documents selectable but excludes them from required counts", () => {
     const documents: RequiredDocumentRef[] = [
       ...requiredDocuments,
-      { id: "a3", name: "Optional A3", versionId, applicationTypeId: "appA", applicationTypeName: "Type A", optional: true }
+      { id: "a3", name: "Optional A3", versionId, applicationTypeId: "appA", applicationTypeName: "Type A", requirementMode: "Optional" }
     ];
     const audit = auditRecord({
       id: "r6",
@@ -114,7 +114,7 @@ describe("reporting logic", () => {
   it("marks records complete without selected optional documents", () => {
     const documents: RequiredDocumentRef[] = [
       ...requiredDocuments,
-      { id: "a3", name: "Optional A3", versionId, applicationTypeId: "appA", applicationTypeName: "Type A", optional: true }
+      { id: "a3", name: "Optional A3", versionId, applicationTypeId: "appA", applicationTypeName: "Type A", requirementMode: "Optional" }
     ];
     const audit = auditRecord({
       id: "r7",
@@ -132,6 +132,104 @@ describe("reporting logic", () => {
     expect(documentSummary([audit], documents).some((doc) => doc.requiredDocumentId === "a3")).toBe(false);
   });
 
+  it("treats blank LOC Exemption as optional for conditional documents", () => {
+    const documents: RequiredDocumentRef[] = [
+      ...requiredDocuments,
+      { id: "a3", name: "Conditional A3", versionId, applicationTypeId: "appA", applicationTypeName: "Type A", requirementMode: "LocConditional" }
+    ];
+    const audit = auditRecord({
+      id: "r11",
+      versionId,
+      applicantName: "Person K",
+      applicationTypeId: "appA",
+      applicationTypeName: "Type A",
+      locExemption: null,
+      selectedDocumentIds: ["a1", "a2"]
+    }, documents);
+
+    expect(audit.status).toBe("Complete");
+    expect(audit.requiredCount).toBe(2);
+    expect(audit.missingDocuments.map((doc) => doc.id)).toEqual([]);
+  });
+
+  it("treats Owner LOC Exemption as optional for conditional documents", () => {
+    const documents: RequiredDocumentRef[] = [
+      ...requiredDocuments,
+      { id: "a3", name: "Conditional A3", versionId, applicationTypeId: "appA", applicationTypeName: "Type A", requirementMode: "LocConditional" }
+    ];
+    const audit = auditRecord({
+      id: "r12",
+      versionId,
+      applicantName: "Person L",
+      applicationTypeId: "appA",
+      applicationTypeName: "Type A",
+      locExemption: "Owner",
+      selectedDocumentIds: ["a1", "a2"]
+    }, documents);
+
+    expect(audit.status).toBe("Complete");
+    expect(audit.requiredCount).toBe(2);
+    expect(audit.missingDocuments.map((doc) => doc.id)).toEqual([]);
+  });
+
+  it("requires conditional documents when LOC Exemption is Others", () => {
+    const documents: RequiredDocumentRef[] = [
+      ...requiredDocuments,
+      { id: "a3", name: "Conditional A3", versionId, applicationTypeId: "appA", applicationTypeName: "Type A", requirementMode: "LocConditional" }
+    ];
+    const audit = auditRecord({
+      id: "r13",
+      versionId,
+      applicantName: "Person M",
+      applicationTypeId: "appA",
+      applicationTypeName: "Type A",
+      locExemption: "Others",
+      selectedDocumentIds: ["a1", "a2"]
+    }, documents);
+
+    expect(audit.status).toBe("Incomplete");
+    expect(audit.requiredCount).toBe(3);
+    expect(audit.missingDocuments.map((doc) => doc.id)).toEqual(["a3"]);
+  });
+
+  it("marks Others complete when conditional documents are selected", () => {
+    const documents: RequiredDocumentRef[] = [
+      ...requiredDocuments,
+      { id: "a3", name: "Conditional A3", versionId, applicationTypeId: "appA", applicationTypeName: "Type A", requirementMode: "LocConditional" }
+    ];
+    const audit = auditRecord({
+      id: "r14",
+      versionId,
+      applicantName: "Person N",
+      applicationTypeId: "appA",
+      applicationTypeName: "Type A",
+      locExemption: "Others",
+      selectedDocumentIds: ["a1", "a2", "a3"]
+    }, documents);
+
+    expect(audit.status).toBe("Complete");
+    expect(audit.requiredCount).toBe(3);
+    expect(audit.submittedCount).toBe(3);
+  });
+
+  it("counts conditional document summary records only when LOC Exemption is Others", () => {
+    const documents: RequiredDocumentRef[] = [
+      ...requiredDocuments,
+      { id: "a3", name: "Conditional A3", versionId, applicationTypeId: "appA", applicationTypeName: "Type A", requirementMode: "LocConditional" }
+    ];
+    const audits = [
+      auditRecord({ id: "r15", versionId, applicantName: "Person O", applicationTypeId: "appA", applicationTypeName: "Type A", locExemption: null, selectedDocumentIds: ["a1", "a2"] }, documents),
+      auditRecord({ id: "r16", versionId, applicantName: "Person P", applicationTypeId: "appA", applicationTypeName: "Type A", locExemption: "Owner", selectedDocumentIds: ["a1", "a2"] }, documents),
+      auditRecord({ id: "r17", versionId, applicantName: "Person Q", applicationTypeId: "appA", applicationTypeName: "Type A", locExemption: "Others", selectedDocumentIds: ["a1", "a2"] }, documents),
+      auditRecord({ id: "r18", versionId, applicantName: "Person R", applicationTypeId: "appA", applicationTypeName: "Type A", locExemption: "Others", selectedDocumentIds: ["a1", "a2", "a3"] }, documents)
+    ];
+
+    expect(documentSummary(audits, documents).find((doc) => doc.requiredDocumentId === "a3")).toMatchObject({
+      applicationRecords: 2,
+      submittedCount: 1,
+      missingCount: 1
+    });
+  });
   it("marks a record pending when no Version is assigned", () => {
     const audit = auditRecord({
       id: "r8",

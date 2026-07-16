@@ -8,9 +8,14 @@ type ApplicationTypeOption = {
   id: string;
   versionId: string;
   name: string;
-  documents: { id: string; name: string; optional?: boolean }[];
+  documents: { id: string; name: string; requirementMode?: "Required" | "Optional" | "LocConditional" }[];
 };
 
+function requirementBadge(mode?: "Required" | "Optional" | "LocConditional") {
+  if (mode === "Optional") return <span className="badge neutral"> Optional</span>;
+  if (mode === "LocConditional") return <span className="badge neutral"> LOC Conditional</span>;
+  return null;
+}
 export function EditSubmittedFiles({
   applicationTypes,
   versionOptions,
@@ -102,7 +107,7 @@ export function EditSubmittedFiles({
                   checked={checked}
                   onChange={() => toggleDocument(document.id)}
                 />
-                <span>{document.name}{document.optional ? <span className="badge neutral"> Optional</span> : null}</span>
+                <span>{document.name}{requirementBadge(document.requirementMode)}</span>
               </label>
             );
           })}

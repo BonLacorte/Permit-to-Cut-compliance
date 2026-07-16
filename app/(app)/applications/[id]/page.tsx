@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { EditApplicationButton } from "@/components/edit-application-button";
 import { StatusBadge } from "@/components/status-badge";
 import { getApplicationTypesWithDocuments, getOfficeChoices, getReportData, getVersionContext } from "@/lib/data";
-import { displayApplicantName, displayPtcField, displayReplantedSeedlings, feesMatch, formatDate, formatFee, formatSignedFeeDifference } from "@/lib/ptc";
+import { displayApplicantName, displayLocExemption, displayPtcField, displayReplantedSeedlings, feesMatch, formatDate, formatFee, formatSignedFeeDifference } from "@/lib/ptc";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
 import { prisma } from "@/lib/prisma";
 
@@ -43,7 +43,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
     id: type.id,
     versionId: type.versionId,
     name: type.name,
-    documents: type.documents.map((document) => ({ id: document.id, name: document.name, optional: document.optional }))
+    documents: type.documents.map((document) => ({ id: document.id, name: document.name, requirementMode: document.requirementMode }))
   }));
   const officeOptions = officeChoices.map((office) => ({
     id: office.id,
@@ -79,6 +79,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
             actualFee: formNumberValue(record.actualFee),
             recordedFee: formNumberValue(record.recordedFee),
             replantedSeedlings: record.replantedSeedlings,
+            locExemption: record.locExemption,
             recommendingApproval: record.recommendingApproval || "",
             approved: record.approved || ""
           }}
@@ -134,6 +135,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
           <div><span>Fee Difference</span><strong>{formatSignedFeeDifference(record)}</strong></div>
           <div><span>Fees Match</span><strong>{feesMatch(record) ? "Yes" : "No"}</strong></div>
           <div><span>Replanted Seedlings</span><strong>{metadataValue(displayReplantedSeedlings(record.replantedSeedlings))}</strong></div>
+          <div><span>LOC Exemption</span><strong>{metadataValue(displayLocExemption(record.locExemption))}</strong></div>
           <div><span>Recommending Approval</span><strong>{metadataValue(record.recommendingApproval || "")}</strong></div>
           <div><span>Approved</span><strong>{metadataValue(record.approved || "")}</strong></div>
         </div>

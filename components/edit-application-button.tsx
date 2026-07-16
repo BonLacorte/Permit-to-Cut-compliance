@@ -28,6 +28,7 @@ type RecordDetails = {
   actualFee?: string | number | null;
   recordedFee?: string | number | null;
   replantedSeedlings?: boolean | null;
+  locExemption?: "Owner" | "Others" | null;
   recommendingApproval?: string | null;
   approved?: string | null;
 };

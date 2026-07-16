@@ -13,9 +13,14 @@ type ApplicationType = {
   id: string;
   versionId: string;
   name: string;
-  documents: { id: string; name: string; optional?: boolean }[];
+  documents: { id: string; name: string; requirementMode?: "Required" | "Optional" | "LocConditional" }[];
 };
 
+function requirementBadge(mode?: "Required" | "Optional" | "LocConditional") {
+  if (mode === "Optional") return <span className="badge neutral"> Optional</span>;
+  if (mode === "LocConditional") return <span className="badge neutral"> LOC Conditional</span>;
+  return null;
+}
 export function DocumentPicker({
   applicationTypes,
   versionOptions,
@@ -110,7 +115,7 @@ export function DocumentPicker({
                 />
                 <span>
                   {document.name}
-                  {document.optional ? <span className="badge neutral"> Optional</span> : null}
+                  {requirementBadge(document.requirementMode)}
                   {alreadyAttached ? <span className="muted"> Already selected</span> : null}
                 </span>
               </label>
