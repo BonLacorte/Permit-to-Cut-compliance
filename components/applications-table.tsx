@@ -42,6 +42,10 @@ type Row = {
   treesApplied: number | null;
   treesApproved: number | null;
   seedlingsReplacement: number | null;
+  recordedValidityDays: number | null;
+  actualValidityDays: number | null;
+  recordedValidityDisplay: string;
+  actualValidityDisplay: string;
   actualFee: string;
   recordedFee: string;
   actualFeeAmount: number;
@@ -60,7 +64,7 @@ type Row = {
   ptcNumberDuplicate: boolean;
 };
 
-type SortKey = "versionName" | "applicantName" | "applicationTypeName" | "submittedCount" | "missingCount" | "status" | "editedByName" | "remarks" | "dateIssued" | "ptcNumber" | "regionalOffice" | "provincialOffice" | "municipality" | "barangay" | "actualFeeAmount" | "recordedFeeAmount" | "feeDifferenceAmount" | "locExemptionDisplay" | "recommendingApproval" | "approved";
+type SortKey = "versionName" | "applicantName" | "applicationTypeName" | "submittedCount" | "missingCount" | "status" | "editedByName" | "remarks" | "dateIssued" | "ptcNumber" | "regionalOffice" | "provincialOffice" | "municipality" | "barangay" | "recordedValidityDays" | "actualValidityDays" | "actualFeeAmount" | "recordedFeeAmount" | "feeDifferenceAmount" | "locExemptionDisplay" | "recommendingApproval" | "approved";
 
 function compareRows(a: Row, b: Row, key: SortKey) {
   const left = a[key];
@@ -132,6 +136,8 @@ export function ApplicationsTable({
             row.provincialOfficeDisplay,
             row.municipalityDisplay,
             row.barangayDisplay,
+            row.recordedValidityDisplay,
+            row.actualValidityDisplay,
             row.feesMatchDisplay,
             row.replantedSeedlingsDisplay,
             row.locExemptionDisplay,
@@ -156,7 +162,7 @@ export function ApplicationsTable({
   const selectedRows = useMemo(() => rows.filter((row) => selectedIds.has(row.id)), [rows, selectedIds]);
   const allVisibleSelected = visible.length > 0 && visible.every((row) => selectedIds.has(row.id));
   const someVisibleSelected = visible.some((row) => selectedIds.has(row.id));
-    const tableColSpan = canBulkDelete ? 25 : 24;
+  const tableColSpan = canBulkDelete ? 27 : 26;
   const activeAssignmentOptions = versionOptions.filter((version) => version.id === "uncategorized" || version.active !== false);
   const bulkPreview = useMemo(() => {
     const targetIsUncategorized = bulkVersionId === "uncategorized";
@@ -254,6 +260,8 @@ export function ApplicationsTable({
                 </th>
               ) : null}
               <th><button className="th-button" onClick={() => sortBy("dateIssued")}>Date Issued{sortLabel("dateIssued")}</button></th>
+              <th><button className="th-button" onClick={() => sortBy("recordedValidityDays")}>Recorded Validity{sortLabel("recordedValidityDays")}</button></th>
+              <th><button className="th-button" onClick={() => sortBy("actualValidityDays")}>Actual Validity{sortLabel("actualValidityDays")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("ptcNumber")}>PTC Number{sortLabel("ptcNumber")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("applicantName")}>Name{sortLabel("applicantName")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("versionName")}>Version{sortLabel("versionName")}</button></th>
@@ -286,6 +294,8 @@ export function ApplicationsTable({
                   <td className="selection-cell"><input aria-label={`Select ${previewLabel(row)}`} checked={selectedIds.has(row.id)} type="checkbox" onChange={(event) => toggleRow(row.id, event.target.checked)} /></td>
                 ) : null}
                 <td>{displayText(row.dateIssued)}</td>
+                <td>{displayText(row.recordedValidityDisplay)}</td>
+                <td>{displayText(row.actualValidityDisplay)}</td>
                 <td><div className="cell-stack"><span>{displayText(row.ptcNumber)}</span>{row.ptcNumberDuplicate ? <span className="badge danger-badge">Duplicate</span> : null}</div></td>
                 <td><Link href={`/applications/${row.id}`}>{displayName(row.applicantName)}</Link></td>
                 <td><div className="cell-stack"><span>{row.versionName}</span>{row.needsVersionReview ? <span className="badge warning-badge">Needs Version Review</span> : null}</div></td>

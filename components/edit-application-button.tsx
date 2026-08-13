@@ -25,6 +25,8 @@ type RecordDetails = {
   treesApplied?: number | null;
   treesApproved?: number | null;
   seedlingsReplacement?: number | null;
+  recordedValidityDays?: number | null;
+  actualValidityDays?: number | null;
   actualFee?: string | number | null;
   recordedFee?: string | number | null;
   replantedSeedlings?: boolean | null;

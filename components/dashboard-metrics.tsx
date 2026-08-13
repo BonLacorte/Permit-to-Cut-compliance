@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { DashboardData } from "@/lib/dashboard";
 
 
@@ -30,17 +30,8 @@ function metricGridClass(count: number) {
 
 export function DashboardMetrics({ data }: { data: DashboardData }) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(() => new Set());
-  const [selectedMissingRegion, setSelectedMissingRegion] = useState("All");
-  const [selectedApplicationRegion, setSelectedApplicationRegion] = useState("All");
-
-  const missingRows = useMemo(
-    () => data.topMissingByRegion[selectedMissingRegion] || [],
-    [data.topMissingByRegion, selectedMissingRegion]
-  );
-  const applicationRows = useMemo(
-    () => data.topApplicationsByRegion[selectedApplicationRegion] || [],
-    [data.topApplicationsByRegion, selectedApplicationRegion]
-  );
+  const missingRows = data.topMissingByRegion.All || [];
+  const applicationRows = data.topApplicationsByRegion.All || [];
 
   function toggleRow(rowId: string) {
     setExpandedRows((current) => {
@@ -94,12 +85,6 @@ export function DashboardMetrics({ data }: { data: DashboardData }) {
               <h2>Top Missing Documents</h2>
               <p className="muted">Most frequently missing required documents by selected region.</p>
             </div>
-            <label className="compact-filter">
-              <span>Region</span>
-              <select value={selectedMissingRegion} onChange={(event) => setSelectedMissingRegion(event.target.value)}>
-                {data.regionOptions.map((region) => <option key={region} value={region}>{region}</option>)}
-              </select>
-            </label>
           </div>
           <div className="table-wrap">
             <table>
@@ -123,12 +108,6 @@ export function DashboardMetrics({ data }: { data: DashboardData }) {
               <h2>Top Application Summary</h2>
               <p className="muted">Most submitted types of application by selected region.</p>
             </div>
-            <label className="compact-filter">
-              <span>Region</span>
-              <select value={selectedApplicationRegion} onChange={(event) => setSelectedApplicationRegion(event.target.value)}>
-                {data.regionOptions.map((region) => <option key={region} value={region}>{region}</option>)}
-              </select>
-            </label>
           </div>
           <div className="table-wrap">
             <table>

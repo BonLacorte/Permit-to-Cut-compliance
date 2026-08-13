@@ -48,7 +48,7 @@ export type DashboardData = {
 const ALL_REGIONS = "All";
 const NO_REGION = "No Region";
 
-function regionName(record: Pick<RecordAudit, "regionalOffice">) {
+export function dashboardRegionName(record: Pick<RecordAudit, "regionalOffice">) {
   return String(record.regionalOffice || "").trim() || NO_REGION;
 }
 
@@ -57,7 +57,7 @@ function metricShare(count: number, total: number) {
 }
 
 function uniqueRegions(audits: RecordAudit[]) {
-  return Array.from(new Set(audits.map(regionName))).sort((a, b) => {
+  return Array.from(new Set(audits.map(dashboardRegionName))).sort((a, b) => {
     if (a === NO_REGION) return 1;
     if (b === NO_REGION) return -1;
     return a.localeCompare(b);
@@ -68,7 +68,7 @@ function regionalBreakdown(audits: RecordAudit[], regions: string[], predicate: 
   const counts = new Map(regions.map((region) => [region, 0]));
   for (const audit of audits) {
     if (!predicate(audit)) continue;
-    const region = regionName(audit);
+    const region = dashboardRegionName(audit);
     counts.set(region, (counts.get(region) || 0) + 1);
   }
   const total = Array.from(counts.values()).reduce((sum, count) => sum + count, 0);
@@ -88,7 +88,7 @@ function regionalAmountBreakdown(audits: RecordAudit[], regions: string[], amoun
   for (const audit of audits) {
     const value = amount(audit);
     if (value <= 0) continue;
-    const region = regionName(audit);
+    const region = dashboardRegionName(audit);
     counts.set(region, (counts.get(region) || 0) + value);
   }
   const total = Array.from(counts.values()).reduce((sum, count) => sum + count, 0);
@@ -142,7 +142,7 @@ export function topMissingDocumentsByRegion(
   const buckets = new Map<string, Map<string, number>>([[ALL_REGIONS, new Map()]]);
 
   for (const audit of audits) {
-    const region = regionName(audit);
+    const region = dashboardRegionName(audit);
     if (!buckets.has(region)) buckets.set(region, new Map());
     for (const document of audit.missingDocuments) {
       const all = buckets.get(ALL_REGIONS)!;
@@ -199,7 +199,7 @@ export function topApplicationSummary(audits: RecordAudit[], maxRows = 5): Dashb
 export function topApplicationSummaryByRegion(audits: RecordAudit[], maxRows = 5): Record<string, DashboardApplicationSummaryRow[]> {
   const buckets = new Map<string, RecordAudit[]>([[ALL_REGIONS, audits]]);
   for (const audit of audits) {
-    const region = regionName(audit);
+    const region = dashboardRegionName(audit);
     if (!buckets.has(region)) buckets.set(region, []);
     buckets.get(region)!.push(audit);
   }
@@ -207,6 +207,15 @@ export function topApplicationSummaryByRegion(audits: RecordAudit[], maxRows = 5
   return Object.fromEntries(
     Array.from(buckets.entries()).map(([region, scopedAudits]) => [region, topApplicationSummary(scopedAudits, maxRows)])
   );
+}
+
+export function dashboardRegionOptions(audits: RecordAudit[]) {
+  return [ALL_REGIONS, ...uniqueRegions(audits)];
+}
+
+export function filterDashboardAuditsByRegion(audits: RecordAudit[], region: string) {
+  if (!region || region === ALL_REGIONS) return audits;
+  return audits.filter((audit) => dashboardRegionName(audit) === region);
 }
 
 export function buildDashboardData(audits: RecordAudit[], requiredDocuments: RequiredDocumentRef[]): DashboardData {
@@ -243,7 +252,7 @@ export function buildDashboardData(audits: RecordAudit[], requiredDocuments: Req
   return {
     totalRecords,
     metricRows,
-    regionOptions: [ALL_REGIONS, ...regions],
+    regionOptions: dashboardRegionOptions(audits),
     topMissingByRegion: topMissingDocumentsByRegion(audits, requiredDocuments),
     topApplicationsByRegion: topApplicationSummaryByRegion(audits)
   };

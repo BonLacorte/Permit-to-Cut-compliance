@@ -1,4 +1,4 @@
-import { displayPtcField, feesMatchDisplay, formatDate, formatFee, displayReplantedSeedlings, formatSignedFeeDifference } from "@/lib/ptc";
+import { displayPtcField, feesMatchDisplay, formatDate, formatFee, displayReplantedSeedlings, formatSignedFeeDifference, formatValidityDays } from "@/lib/ptc";
 
 export type AuditStatus = "Complete" | "Incomplete" | "Pending";
 export type LocExemptionValue = "Owner" | "Others" | null | undefined;
@@ -35,6 +35,8 @@ export type RecordRef = {
   treesApplied?: number | null;
   treesApproved?: number | null;
   seedlingsReplacement?: number | null;
+  recordedValidityDays?: number | null;
+  actualValidityDays?: number | null;
   actualFee?: unknown;
   recordedFee?: unknown;
   replantedSeedlings?: boolean | null;
@@ -239,6 +241,8 @@ export function documentCombinations(audits: RecordAudit[]) {
 export function applicationExportRows(audits: RecordAudit[]) {
   return audits.map((audit) => ({
     "Date Issued": formatDate(audit.dateIssued),
+    "Recorded Validity": formatValidityDays(audit.recordedValidityDays),
+    "Actual Validity": formatValidityDays(audit.actualValidityDays),
     "PTC Number": audit.ptcNumber || "",
     "Duplicate PTC Number": audit.ptcNumberDuplicate ? "Yes" : "No",
     "Name of Applicant": audit.applicantName,

@@ -125,6 +125,8 @@ function ptcRecordData(formData: FormData) {
     treesApplied: nullableInt(formData.get("treesApplied")),
     treesApproved: nullableInt(formData.get("treesApproved")),
     seedlingsReplacement: nullableInt(formData.get("seedlingsReplacement")),
+    recordedValidityDays: nullableInt(formData.get("recordedValidityDays")),
+    actualValidityDays: nullableInt(formData.get("actualValidityDays")),
     actualFee: nullableDecimal(formData.get("actualFee")),
     recordedFee: nullableDecimal(formData.get("recordedFee")),
     replantedSeedlings: nullableBoolean(formData.get("replantedSeedlings")),

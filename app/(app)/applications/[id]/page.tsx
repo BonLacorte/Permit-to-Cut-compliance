@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { EditApplicationButton } from "@/components/edit-application-button";
 import { StatusBadge } from "@/components/status-badge";
 import { getApplicationTypesWithDocuments, getOfficeChoices, getReportData, getVersionContext } from "@/lib/data";
-import { displayApplicantName, displayLocExemption, displayPtcField, displayReplantedSeedlings, feesMatch, formatDate, formatFee, formatSignedFeeDifference } from "@/lib/ptc";
+import { displayApplicantName, displayLocExemption, displayPtcField, displayReplantedSeedlings, feesMatch, formatDate, formatFee, formatSignedFeeDifference, formatValidityDays } from "@/lib/ptc";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
 import { prisma } from "@/lib/prisma";
 
@@ -76,6 +76,8 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
             treesApplied: record.treesApplied,
             treesApproved: record.treesApproved,
             seedlingsReplacement: record.seedlingsReplacement,
+            recordedValidityDays: record.recordedValidityDays,
+            actualValidityDays: record.actualValidityDays,
             actualFee: formNumberValue(record.actualFee),
             recordedFee: formNumberValue(record.recordedFee),
             replantedSeedlings: record.replantedSeedlings,
@@ -123,6 +125,8 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
           <div><span>Version</span><strong>{record.version?.name || "Uncategorized"}</strong></div>
           <div><span>Date Issued</span><strong>{metadataValue(dateIssued)}</strong></div>
           <div><span>PTC Number</span><strong>{metadataValue(record.ptcNumber || "")}</strong></div>
+          <div><span>Recorded Validity</span><strong>{metadataValue(formatValidityDays(record.recordedValidityDays))}</strong></div>
+          <div><span>Actual Validity</span><strong>{metadataValue(formatValidityDays(record.actualValidityDays))}</strong></div>
           <div><span>Regional Office</span><strong>{metadataValue(displayPtcField(record, "regionalOffice"))}</strong></div>
           <div><span>Provincial Office</span><strong>{metadataValue(displayPtcField(record, "provincialOffice"))}</strong></div>
           <div><span>Municipality</span><strong>{metadataValue(displayPtcField(record, "municipality"))}</strong></div>

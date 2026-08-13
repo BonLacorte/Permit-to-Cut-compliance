@@ -6,6 +6,7 @@ import {
   completionSummary,
   documentCombinations,
   documentSummary,
+  applicationExportRows,
   type RecordRef,
   type RequiredDocumentRef
 } from "@/lib/reporting";
@@ -323,6 +324,25 @@ describe("reporting logic", () => {
 
     expect(audit.needsVersionReview).toBe(true);
     expect(audit.versionReviewMessages).toContain("1 submitted document do not belong to the assigned Version and Type of Application.");
+  });
+
+  it("exports nullable validity days without treating blanks as zero", () => {
+    const auditWithValidity = auditRecord({
+      id: "r19",
+      versionId,
+      versionName: "2023 and 2024",
+      applicantName: "Person S",
+      applicationTypeId: "appA",
+      applicationTypeName: "Type A",
+      selectedDocumentIds: ["a1", "a2"],
+      recordedValidityDays: 10,
+      actualValidityDays: null
+    }, requiredDocuments);
+
+    expect(applicationExportRows([auditWithValidity])[0]).toMatchObject({
+      "Recorded Validity": "10",
+      "Actual Validity": ""
+    });
   });
   it("treats blank fees as zero when comparing fees", () => {
     expect(feesMatchDisplay({ actualFee: null, recordedFee: "" })).toBe("0");

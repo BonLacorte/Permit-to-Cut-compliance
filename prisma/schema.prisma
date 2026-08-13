@@ -137,6 +137,8 @@ model ApplicationRecord {
   treesApplied         Int?
   treesApproved        Int?
   seedlingsReplacement Int?
+  recordedValidityDays Int?
+  actualValidityDays   Int?
   actualFee            Decimal?           @db.Decimal(12, 2)
   recordedFee          Decimal?           @db.Decimal(12, 2)
   replantedSeedlings   Boolean?

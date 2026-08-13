@@ -210,6 +210,8 @@ export async function getReportData(options: VersionScopedOptions = {}) {
     treesApplied: record.treesApplied,
     treesApproved: record.treesApproved,
     seedlingsReplacement: record.seedlingsReplacement,
+    recordedValidityDays: record.recordedValidityDays,
+    actualValidityDays: record.actualValidityDays,
     actualFee: record.actualFee,
     recordedFee: record.recordedFee,
     replantedSeedlings: record.replantedSeedlings,

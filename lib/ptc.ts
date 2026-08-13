@@ -21,6 +21,8 @@ export type PtcDisplayRecord = {
   treesApplied?: number | null;
   treesApproved?: number | null;
   seedlingsReplacement?: number | null;
+  recordedValidityDays?: number | null;
+  actualValidityDays?: number | null;
   actualFee?: unknown;
   recordedFee?: unknown;
   replantedSeedlings?: boolean | null;
@@ -57,6 +59,12 @@ export function formatFee(value?: unknown) {
     minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
     maximumFractionDigits: 2
   });
+}
+
+export function formatValidityDays(value?: number | string | null) {
+  if (value === null || value === undefined || value === "") return "";
+  const parsed = typeof value === "number" ? value : Number(String(value).replace(/,/g, "").trim());
+  return Number.isFinite(parsed) ? String(Math.trunc(parsed)) : "";
 }
 
 export function feesMatch(record: Pick<PtcDisplayRecord, "actualFee" | "recordedFee">) {
@@ -104,6 +112,7 @@ export function displayPtcField(record: PtcDisplayRecord, key: keyof PtcDisplayR
   if (key === "treesApplied" || key === "treesApproved" || key === "seedlingsReplacement") {
     return String(numberOrZero(value as number | null | undefined));
   }
+  if (key === "recordedValidityDays" || key === "actualValidityDays") return formatValidityDays(value as number | null | undefined);
   if (key === "actualFee" || key === "recordedFee") return formatFee(value);
   if (key === "replantedSeedlings") return displayReplantedSeedlings(value as boolean | null | undefined);
   if (key === "locExemption") return displayLocExemption(value as "Owner" | "Others" | null | undefined);

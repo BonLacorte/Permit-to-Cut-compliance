@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDashboardData, topApplicationSummary, topApplicationSummaryByRegion, topMissingDocumentsByRegion } from "@/lib/dashboard";
+import { buildDashboardData, dashboardRegionOptions, filterDashboardAuditsByRegion, topApplicationSummary, topApplicationSummaryByRegion, topMissingDocumentsByRegion } from "@/lib/dashboard";
 import { auditRecord, type RecordRef, type RequiredDocumentRef } from "@/lib/reporting";
 
 const versionId = "version-2023-2024";
@@ -111,6 +111,41 @@ describe("dashboard metrics", () => {
     expect(feeVariance.regions).toContainEqual({ region: "No Region", count: 25, share: 0.5 });
   });
 
+
+  it("filters the whole dashboard by selected region", () => {
+    const regionOptions = dashboardRegionOptions(audits);
+    const scopedAudits = filterDashboardAuditsByRegion(audits, "Region VIII");
+    const data = { ...buildDashboardData(scopedAudits, requiredDocuments), regionOptions };
+    const total = data.metricRows[0].metrics.find((metric) => metric.id === "total")!;
+    const complete = data.metricRows[0].metrics.find((metric) => metric.id === "complete")!;
+    const missingRows = data.topMissingByRegion.All;
+    const appRows = data.topApplicationsByRegion.All;
+
+    expect(data.regionOptions).toEqual(["All", "Region IV-A", "Region VIII", "No Region"]);
+    expect(total.total).toBe(2);
+    expect(total.regions).toEqual([{ region: "Region VIII", count: 2, share: 1 }]);
+    expect(complete.total).toBe(0);
+    expect(missingRows).toEqual([
+      { requiredDocumentId: "doc-b", requiredDocumentName: "Document B", missingCount: 1 },
+      { requiredDocumentId: "doc-c", requiredDocumentName: "Document C", missingCount: 1 }
+    ]);
+    expect(appRows).toEqual([
+      expect.objectContaining({ applicationTypeName: "Type A", totalRecords: 1, share: 0.5 }),
+      expect.objectContaining({ applicationTypeName: "Type B", totalRecords: 1, share: 0.5 })
+    ]);
+  });
+
+  it("filters the dashboard No Region bucket", () => {
+    const scopedAudits = filterDashboardAuditsByRegion(audits, "No Region");
+    const data = buildDashboardData(scopedAudits, requiredDocuments);
+    const total = data.metricRows[0].metrics.find((metric) => metric.id === "total")!;
+
+    expect(total.total).toBe(1);
+    expect(total.regions).toEqual([{ region: "No Region", count: 1, share: 1 }]);
+    expect(data.topApplicationsByRegion.All).toEqual([
+      expect.objectContaining({ applicationTypeName: "Pending", totalRecords: 1, share: 1 })
+    ]);
+  });
   it("filters top missing documents by selected region", () => {
     const rows = topMissingDocumentsByRegion(audits, requiredDocuments);
 

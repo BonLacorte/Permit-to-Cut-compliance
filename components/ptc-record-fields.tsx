@@ -15,6 +15,8 @@ type PtcRecordFieldsProps = {
     treesApplied?: number | null;
     treesApproved?: number | null;
     seedlingsReplacement?: number | null;
+    recordedValidityDays?: number | null;
+    actualValidityDays?: number | null;
     actualFee?: string | number | null;
     recordedFee?: string | number | null;
     replantedSeedlings?: boolean | null;
@@ -25,6 +27,10 @@ type PtcRecordFieldsProps = {
 };
 
 function feeDefault(value?: string | number | null) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function numberDefault(value?: number | null) {
   return value === null || value === undefined ? "" : String(value);
 }
 
@@ -46,6 +52,14 @@ export function PtcRecordFields({ defaults, officeChoices }: PtcRecordFieldsProp
         <div className="field">
           <label htmlFor="ptcNumber">PTC Number</label>
           <input id="ptcNumber" name="ptcNumber" defaultValue={defaults?.ptcNumber || ""} />
+        </div>
+        <div className="field">
+          <label htmlFor="recordedValidityDays">Recorded Validity</label>
+          <input id="recordedValidityDays" name="recordedValidityDays" type="number" min="0" step="1" defaultValue={numberDefault(defaults?.recordedValidityDays)} />
+        </div>
+        <div className="field">
+          <label htmlFor="actualValidityDays">Actual Validity</label>
+          <input id="actualValidityDays" name="actualValidityDays" type="number" min="0" step="1" defaultValue={numberDefault(defaults?.actualValidityDays)} />
         </div>
         <div className="field">
           <label htmlFor="regionalOffice">Regional Office</label>

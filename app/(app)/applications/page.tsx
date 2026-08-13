@@ -3,7 +3,7 @@ import { ApplicationsTable } from "@/components/applications-table";
 import { VersionFilter } from "@/components/version-filter";
 import { requireUser } from "@/lib/auth";
 import { getApplicationTypesWithDocuments, getOfficeChoices, getReportData, getVersionContext } from "@/lib/data";
-import { blankDisplay, decimalOrZero, displayPtcField, displayLocExemption, displayReplantedSeedlings, feesMatch, feeDifference, formatDate, formatFee, formatSignedFeeDifference } from "@/lib/ptc";
+import { blankDisplay, decimalOrZero, displayPtcField, displayLocExemption, displayReplantedSeedlings, feesMatch, feeDifference, formatDate, formatFee, formatSignedFeeDifference, formatValidityDays } from "@/lib/ptc";
 
 function formNumberValue(value: unknown) {
   return value === null || value === undefined ? "" : String(value);
@@ -50,6 +50,10 @@ export default async function ApplicationsPage({ searchParams }: { searchParams?
     treesApplied: audit.treesApplied ?? null,
     treesApproved: audit.treesApproved ?? null,
     seedlingsReplacement: audit.seedlingsReplacement ?? null,
+    recordedValidityDays: audit.recordedValidityDays ?? null,
+    actualValidityDays: audit.actualValidityDays ?? null,
+    recordedValidityDisplay: formatValidityDays(audit.recordedValidityDays),
+    actualValidityDisplay: formatValidityDays(audit.actualValidityDays),
     actualFee: formNumberValue(audit.actualFee),
     recordedFee: formNumberValue(audit.recordedFee),
     actualFeeAmount: decimalOrZero(audit.actualFee),

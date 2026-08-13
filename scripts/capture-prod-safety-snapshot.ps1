@@ -101,57 +101,35 @@ try {
   $manifest += "IMPORTANT: DATABASE_URL is intentionally not recorded in this manifest."
   Set-Content -LiteralPath $manifestPath -Value ($manifest -join [Environment]::NewLine)
 
-  $countScriptPath = Join-Path $backupDir "production-counts-helper.js"
-  $countScript = @"
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
-const tables = [
-  'application_records',
-  'ptc_versions',
-  'application_types',
-  'required_documents',
-  'progress_entries',
-  'progress_documents',
-  'regional_offices',
-  'provincial_offices',
-  'users'
-];
-function quoteIdentifier(value) {
-  return '"' + value.replace(/"/g, '""') + '"';
-}
-(async () => {
-  const result = { captured_at: new Date().toISOString() };
-  for (const table of tables) {
-    const exists = await prisma.`$queryRawUnsafe("SELECT to_regclass('public." + table + "') IS NOT NULL AS exists");
-    if (exists[0].exists) {
-      const rows = await prisma.`$queryRawUnsafe('SELECT count(*)::text AS count FROM public.' + quoteIdentifier(table));
-      result[table] = Number(rows[0].count);
-    } else {
-      result[table] = 'missing';
-    }
-  }
-  console.log(JSON.stringify(result, null, 2));
-})()
-  .catch((error) => {
-    console.error(error.message);
-    process.exitCode = 1;
-  })
-  .finally(async () => prisma.`$disconnect());
+  $countsSql = @"
+SELECT jsonb_pretty(jsonb_build_object(
+  'captured_at', now(),
+  'application_records', (SELECT count(*) FROM public.application_records),
+  'ptc_versions', (SELECT count(*) FROM public.ptc_versions),
+  'application_types', (SELECT count(*) FROM public.application_types),
+  'required_documents', (SELECT count(*) FROM public.required_documents),
+  'progress_entries', (SELECT count(*) FROM public.progress_entries),
+  'progress_documents', (SELECT count(*) FROM public.progress_documents),
+  'regional_offices', (SELECT count(*) FROM public.regional_offices),
+  'provincial_offices', (SELECT count(*) FROM public.provincial_offices),
+  'ptt_application_records', (SELECT count(*) FROM public.ptt_application_records),
+  'ptt_transport_types', (SELECT count(*) FROM public.ptt_transport_types),
+  'users', (SELECT count(*) FROM public.users)
+));
 "@
+  $countsSqlPath = Join-Path $backupDir "production-counts.sql"
   try {
-    Set-Content -LiteralPath $countScriptPath -Value $countScript -NoNewline
-    $env:DATABASE_URL = $databaseUrl
-    node $countScriptPath | Set-Content -LiteralPath $countsPath
-    if ($LASTEXITCODE -ne 0) {
+    Set-Content -LiteralPath $countsSqlPath -Value $countsSql -NoNewline
+    $countsCommand = "psql `"`$DATABASE_URL`" --tuples-only --no-align --file /backups/production-counts.sql"
+    Invoke-PostgresContainer -EnvFile $tempEnvFile -MountSource $backupDir -MountTarget "/backups" -ShellCommand $countsCommand | Set-Content -LiteralPath $countsPath
+    if (-not (Test-Path -LiteralPath $countsPath) -or (Get-Item -LiteralPath $countsPath).Length -eq 0) {
       throw "Could not capture production table counts."
     }
   } finally {
-    Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
-    if (Test-Path -LiteralPath $countScriptPath) {
-      Remove-Item -LiteralPath $countScriptPath -Force
+    if (Test-Path -LiteralPath $countsSqlPath) {
+      Remove-Item -LiteralPath $countsSqlPath -Force
     }
   }
-
   if ($SkipDump) {
     Write-Host "SkipDump was set. Manifest and counts were created, but no pg_dump file was created." -ForegroundColor Yellow
   } else {
