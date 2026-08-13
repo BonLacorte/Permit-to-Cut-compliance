@@ -13,12 +13,14 @@ export function VersionFilter({
   label = "Version",
   options,
   path,
-  selected
+  selected,
+  preservedParams = {}
 }: {
   label?: string;
   options: VersionOption[];
   path: string;
   selected: string;
+  preservedParams?: Record<string, string | undefined>;
 }) {
   const router = useRouter();
   const activeVersions = options.filter((option) => option.id !== UNCATEGORIZED_VERSION && option.active !== false);
@@ -26,7 +28,12 @@ export function VersionFilter({
   const uncategorized = options.find((option) => option.id === UNCATEGORIZED_VERSION);
 
   function changeVersion(value: string) {
-    router.push(`${path}?version=${encodeURIComponent(value)}`);
+    const params = new URLSearchParams();
+    params.set("version", value);
+    for (const [key, paramValue] of Object.entries(preservedParams)) {
+      if (paramValue) params.set(key, paramValue);
+    }
+    router.push(`${path}?${params.toString()}`);
   }
 
   return (

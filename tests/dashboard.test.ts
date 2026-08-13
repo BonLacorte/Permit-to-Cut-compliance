@@ -146,6 +146,12 @@ describe("dashboard metrics", () => {
       expect.objectContaining({ applicationTypeName: "Pending", totalRecords: 1, share: 1 })
     ]);
   });
+
+  it("supports Applications page Region filter inputs", () => {
+    expect(filterDashboardAuditsByRegion(audits, "All").map((audit) => audit.id)).toEqual(["r1", "r2", "r3", "r4"]);
+    expect(filterDashboardAuditsByRegion(audits, "Region IV-A").map((audit) => audit.id)).toEqual(["r1"]);
+    expect(filterDashboardAuditsByRegion(audits, "No Region").map((audit) => audit.id)).toEqual(["r4"]);
+  });
   it("filters top missing documents by selected region", () => {
     const rows = topMissingDocumentsByRegion(audits, requiredDocuments);
 
