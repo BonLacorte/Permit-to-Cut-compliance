@@ -8,6 +8,7 @@ import { clearSession, requireAdmin, requireUser, setSession } from "@/lib/auth"
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { parseGroundsWorkbook, parsePtcRecordsWorkbook } from "@/lib/excel";
 import { PERMIT_GROUP_PTC } from "@/lib/ptc";
+import { PERMIT_GROUP_PTT } from "@/lib/ptt";
 import { prisma } from "@/lib/prisma";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
 
@@ -33,6 +34,17 @@ const progressSchema = z.object({
   applicationRecordId: z.string().min(1),
   remarks: z.string().trim().optional(),
   documentIds: z.array(z.string()).default([])
+});
+
+const createPttRecordSchema = z.object({
+  transporterName: z.string().trim().optional(),
+  versionId: z.string().trim().optional(),
+  remarks: z.string().trim().optional()
+});
+
+const updatePttRecordSchema = createPttRecordSchema.extend({
+  id: z.string().min(1),
+  returnTo: z.string().optional()
 });
 
 const passwordSchema = z.object({
@@ -122,6 +134,39 @@ function ptcRecordData(formData: FormData) {
   };
 }
 
+function pttRecordData(formData: FormData) {
+  return {
+    pttNumber: nullableString(formData.get("pttNumber")),
+    dateIssued: nullableDate(formData.get("dateIssued")),
+    regionalOffice: nullableString(formData.get("regionalOffice")),
+    provincialOffice: nullableString(formData.get("provincialOffice")),
+    transporterName: nullableString(formData.get("transporterName")),
+    transporterAddress: nullableString(formData.get("transporterAddress")),
+    ptcNumber: nullableString(formData.get("ptcNumber")),
+    pcaRegistrationCertificateNumber: nullableString(formData.get("pcaRegistrationCertificateNumber")),
+    pcaRegistrationCertificateDate: nullableDate(formData.get("pcaRegistrationCertificateDate")),
+    businessAddress: nullableString(formData.get("businessAddress")),
+    boardFeetGranted: nullableDecimal(formData.get("boardFeetGranted")),
+    certificateOfQuantityVolumeAttached: nullableBoolean(formData.get("certificateOfQuantityVolumeAttached")),
+    volumeBoardFeet: nullableDecimal(formData.get("volumeBoardFeet")),
+    originOfLumber: nullableString(formData.get("originOfLumber")),
+    destination: nullableString(formData.get("destination")),
+    consigneeName: nullableString(formData.get("consigneeName")),
+    consigneePcaRegistration: nullableString(formData.get("consigneePcaRegistration")),
+    transportType: nullableString(formData.get("transportType")),
+    vehiclePlateNumber: nullableString(formData.get("vehiclePlateNumber")),
+    authorizedDriverName: nullableString(formData.get("authorizedDriverName")),
+    authorizedDriverContact: nullableString(formData.get("authorizedDriverContact")),
+    amountPaid: nullableDecimal(formData.get("amountPaid")),
+    officialReceiptNumber: nullableString(formData.get("officialReceiptNumber")),
+    validUntil: nullableDate(formData.get("validUntil")),
+    dateValidatedInspected: nullableDate(formData.get("dateValidatedInspected")),
+    validatedInspectedBy: nullableString(formData.get("validatedInspectedBy")),
+    issuedBy: nullableString(formData.get("issuedBy")),
+    remarks: nullableString(formData.get("remarks"))
+  };
+}
+
 function safeReturnTo(value: FormDataEntryValue | null, fallback: string) {
   const path = String(value || fallback);
   return path.startsWith("/") && !path.startsWith("//") ? path : fallback;
@@ -147,6 +192,12 @@ function revalidateReports() {
   revalidatePath("/reports/application-summary");
   revalidatePath("/reports/completion-summary");
   revalidatePath("/reports/document-combinations");
+}
+
+function revalidatePttApplications() {
+  revalidatePath("/ptt/applications");
+  revalidatePath("/ptt/applications/new");
+  revalidatePath("/admin/master-data");
 }
 
 export async function loginAction(formData: FormData) {
@@ -471,6 +522,113 @@ export async function deleteApplicationRecordAction(formData: FormData) {
   redirectWithToast("/applications", "success", "Application deleted.");
 }
 
+export async function createPttApplicationRecordAction(formData: FormData) {
+  const user = await requireUser();
+  const parsed = createPttRecordSchema.safeParse({
+    transporterName: formData.get("transporterName") || undefined,
+    versionId: formData.get("versionId") || undefined,
+    remarks: formData.get("remarks") || undefined
+  });
+  if (!parsed.success) redirectWithToast("/ptt/applications/new", "error", "Could not read the PTT application form.");
+
+  const versionId = nullableVersionId(formData.get("versionId"));
+  let recordId = "";
+
+  try {
+    const version = versionId ? await prisma.ptcVersion.findFirst({ where: { id: versionId, group: PERMIT_GROUP_PTT, active: true } }) : null;
+    if (versionId && !version) redirectWithToast("/ptt/applications/new", "error", "Selected PTT Version was not found.");
+
+    const record = await prisma.pttApplicationRecord.create({
+      data: {
+        group: PERMIT_GROUP_PTT,
+        versionId,
+        ...pttRecordData(formData),
+        createdById: user.id
+      }
+    });
+    recordId = record.id;
+
+    await prisma.activityLog.create({
+      data: { userId: user.id, action: "CREATE_PTT_RECORD", targetType: "ptt_application_record", targetId: record.id, metadata: { versionId } }
+    });
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    redirectWithToast("/ptt/applications/new", "error", "Could not create the PTT application record.");
+  }
+
+  revalidatePttApplications();
+  redirectWithToast(`/ptt/applications/${recordId}`, "success", "PTT application created.");
+}
+
+export async function updatePttApplicationRecordAction(formData: FormData) {
+  const user = await requireUser();
+  const returnTo = safeReturnTo(formData.get("returnTo"), "/ptt/applications");
+  const parsed = updatePttRecordSchema.safeParse({
+    id: formData.get("id"),
+    transporterName: formData.get("transporterName") || undefined,
+    versionId: formData.get("versionId") || undefined,
+    remarks: formData.get("remarks") || undefined,
+    returnTo
+  });
+  if (!parsed.success) redirectWithToast(returnTo, "error", "Could not read the PTT application form.");
+
+  const input = parsed.data;
+  const versionId = nullableVersionId(formData.get("versionId"));
+  const current = await prisma.pttApplicationRecord.findUnique({ where: { id: input.id } });
+  if (!current) redirectWithToast("/ptt/applications", "error", "PTT application record was not found.");
+
+  try {
+    const version = versionId ? await prisma.ptcVersion.findFirst({ where: { id: versionId, group: PERMIT_GROUP_PTT, active: true } }) : null;
+    if (versionId && !version) redirectWithToast(returnTo, "error", "Selected PTT Version was not found.");
+
+    await prisma.pttApplicationRecord.update({
+      where: { id: input.id },
+      data: {
+        versionId,
+        ...pttRecordData(formData),
+        editedById: user.id
+      }
+    });
+
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: "UPDATE_PTT_RECORD",
+        targetType: "ptt_application_record",
+        targetId: input.id,
+        metadata: { versionChanged: current.versionId !== versionId }
+      }
+    });
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    redirectWithToast(returnTo, "error", "Could not update the PTT application record.");
+  }
+
+  revalidatePttApplications();
+  revalidatePath(`/ptt/applications/${input.id}`);
+  redirectWithToast(returnTo, "success", "PTT application updated.");
+}
+
+export async function deletePttApplicationRecordAction(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get("id") || "");
+  if (!id) redirectWithToast("/ptt/applications", "error", "PTT application record id is required.");
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.pttApplicationRecord.delete({ where: { id } });
+      await tx.activityLog.create({
+        data: { userId: user.id, action: "DELETE_PTT_RECORD", targetType: "ptt_application_record", targetId: id }
+      });
+    });
+  } catch {
+    redirectWithToast("/ptt/applications", "error", "Could not delete the PTT application record.");
+  }
+
+  revalidatePttApplications();
+  redirectWithToast("/ptt/applications", "success", "PTT application deleted.");
+}
+
 export async function bulkDeleteApplicationRecordsAction(formData: FormData) {
   const admin = await requireAdmin();
   const ids = [...new Set(formData.getAll("applicationRecordIds").map(String).filter(Boolean))];
@@ -649,6 +807,8 @@ export async function deleteUserAction(formData: FormData) {
     await prisma.$transaction(async (tx) => {
       await tx.applicationRecord.updateMany({ where: { createdById: id }, data: { createdById: admin.id } });
       await tx.applicationRecord.updateMany({ where: { editedById: id }, data: { editedById: null } });
+      await tx.pttApplicationRecord.updateMany({ where: { createdById: id }, data: { createdById: admin.id } });
+      await tx.pttApplicationRecord.updateMany({ where: { editedById: id }, data: { editedById: null } });
       await tx.progressEntry.updateMany({ where: { userId: id }, data: { userId: admin.id } });
       await tx.activityLog.updateMany({ where: { userId: id }, data: { userId: admin.id } });
       await tx.user.delete({ where: { id } });
@@ -801,6 +961,124 @@ export async function deletePtcVersionAction(formData: FormData) {
   revalidatePath("/admin/master-data");
   revalidateReports();
   redirectWithToast("/admin/master-data", "success", "Version deactivated.");
+}
+
+export async function createPttVersionAction(formData: FormData) {
+  await requireAdmin();
+  const name = String(formData.get("name") || "").trim();
+  const description = nullableString(formData.get("description"));
+  if (!name) redirectWithToast("/admin/master-data", "error", "PTT Version name is required.");
+
+  try {
+    const count = await prisma.ptcVersion.count({ where: { group: PERMIT_GROUP_PTT } });
+    await prisma.ptcVersion.upsert({
+      where: { group_name: { group: PERMIT_GROUP_PTT, name } },
+      update: { active: true, description },
+      create: { group: PERMIT_GROUP_PTT, name, description, sortOrder: count + 1 }
+    });
+  } catch {
+    redirectWithToast("/admin/master-data", "error", "Could not create the PTT Version. The name may already exist.");
+  }
+
+  revalidatePttApplications();
+  redirectWithToast("/admin/master-data", "success", "PTT Version created.");
+}
+
+export async function updatePttVersionAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") || "");
+  const name = String(formData.get("name") || "").trim();
+  const description = nullableString(formData.get("description"));
+  if (!id || !name) redirectWithToast("/admin/master-data", "error", "PTT Version name is required.");
+
+  try {
+    const version = await prisma.ptcVersion.findFirst({ where: { id, group: PERMIT_GROUP_PTT } });
+    if (!version) redirectWithToast("/admin/master-data", "error", "PTT Version was not found.");
+    await prisma.ptcVersion.update({ where: { id }, data: { name, description } });
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    redirectWithToast("/admin/master-data", "error", "Could not update the PTT Version. The name may already exist.");
+  }
+
+  revalidatePttApplications();
+  redirectWithToast("/admin/master-data", "success", "PTT Version updated.");
+}
+
+export async function deletePttVersionAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") || "");
+  if (!id) redirectWithToast("/admin/master-data", "error", "PTT Version id is required.");
+
+  try {
+    const version = await prisma.ptcVersion.findFirst({ where: { id, group: PERMIT_GROUP_PTT } });
+    if (!version) redirectWithToast("/admin/master-data", "error", "PTT Version was not found.");
+    await prisma.ptcVersion.update({ where: { id }, data: { active: false } });
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    redirectWithToast("/admin/master-data", "error", "Could not deactivate the PTT Version.");
+  }
+
+  revalidatePttApplications();
+  redirectWithToast("/admin/master-data", "success", "PTT Version deactivated.");
+}
+
+export async function createPttTransportTypeAction(formData: FormData) {
+  await requireAdmin();
+  const versionId = String(formData.get("versionId") || "");
+  const name = String(formData.get("name") || "").trim();
+  if (!versionId || !name) redirectWithToast("/admin/master-data", "error", "PTT Version and transport type are required.");
+
+  try {
+    const version = await prisma.ptcVersion.findFirst({ where: { id: versionId, group: PERMIT_GROUP_PTT, active: true } });
+    if (!version) redirectWithToast("/admin/master-data", "error", "Selected PTT Version was not found.");
+    const count = await prisma.pttTransportType.count({ where: { versionId } });
+    await prisma.pttTransportType.upsert({
+      where: { versionId_name: { versionId, name } },
+      update: { active: true },
+      create: { group: PERMIT_GROUP_PTT, versionId, name, sortOrder: count + 1 }
+    });
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    redirectWithToast("/admin/master-data", "error", "Could not add the PTT transport type. It may already exist in this Version.");
+  }
+
+  revalidatePttApplications();
+  redirectWithToast("/admin/master-data", "success", "PTT transport type added.");
+}
+
+export async function updatePttTransportTypeAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") || "");
+  const versionId = String(formData.get("versionId") || "");
+  const name = String(formData.get("name") || "").trim();
+  if (!id || !versionId || !name) redirectWithToast("/admin/master-data", "error", "PTT Version and transport type are required.");
+
+  try {
+    const version = await prisma.ptcVersion.findFirst({ where: { id: versionId, group: PERMIT_GROUP_PTT } });
+    if (!version) redirectWithToast("/admin/master-data", "error", "Selected PTT Version was not found.");
+    await prisma.pttTransportType.update({ where: { id }, data: { versionId, name, active: true } });
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    redirectWithToast("/admin/master-data", "error", "Could not update the PTT transport type. It may already exist in this Version.");
+  }
+
+  revalidatePttApplications();
+  redirectWithToast("/admin/master-data", "success", "PTT transport type updated.");
+}
+
+export async function deletePttTransportTypeAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") || "");
+  if (!id) redirectWithToast("/admin/master-data", "error", "PTT transport type id is required.");
+
+  try {
+    await prisma.pttTransportType.update({ where: { id }, data: { active: false } });
+  } catch {
+    redirectWithToast("/admin/master-data", "error", "Could not delete the PTT transport type.");
+  }
+
+  revalidatePttApplications();
+  redirectWithToast("/admin/master-data", "success", "PTT transport type deleted.");
 }
 export async function createApplicationTypeAction(formData: FormData) {
   await requireAdmin();
@@ -1079,6 +1357,89 @@ export async function hardDeletePtcVersionAction(formData: FormData) {
   revalidatePath("/admin/master-data");
   revalidateReports();
   redirectWithToast("/admin/master-data", "success", "Version and unused copied master data permanently deleted.");
+}
+
+export async function restorePttVersionAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") || "");
+  if (!id) redirectWithToast("/admin/master-data", "error", "PTT Version id is required.");
+
+  try {
+    const version = await prisma.ptcVersion.findFirst({ where: { id, group: PERMIT_GROUP_PTT } });
+    if (!version) redirectWithToast("/admin/master-data", "error", "PTT Version was not found.");
+    await prisma.ptcVersion.update({ where: { id }, data: { active: true } });
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    redirectWithToast("/admin/master-data", "error", "Could not restore the PTT Version.");
+  }
+
+  revalidatePttApplications();
+  redirectWithToast("/admin/master-data", "success", "PTT Version restored.");
+}
+
+export async function hardDeletePttVersionAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") || "");
+  if (!id) redirectWithToast("/admin/master-data", "error", "PTT Version id is required.");
+
+  try {
+    const version = await prisma.ptcVersion.findFirst({
+      where: { id, group: PERMIT_GROUP_PTT },
+      include: { pttRecords: true }
+    });
+    if (!version) redirectWithToast("/admin/master-data", "error", "PTT Version was not found.");
+    if (version.active) redirectWithToast("/admin/master-data", "error", "Deactivate the PTT Version before permanently deleting it.");
+    if (version.pttRecords.length > 0) redirectWithToast("/admin/master-data", "error", "Cannot permanently delete a PTT Version assigned to application records.");
+    await prisma.ptcVersion.delete({ where: { id } });
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    redirectWithToast("/admin/master-data", "error", "Could not permanently delete the PTT Version.");
+  }
+
+  revalidatePttApplications();
+  redirectWithToast("/admin/master-data", "success", "PTT Version permanently deleted.");
+}
+
+export async function restorePttTransportTypeAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") || "");
+  if (!id) redirectWithToast("/admin/master-data", "error", "PTT transport type id is required.");
+
+  try {
+    const type = await prisma.pttTransportType.findUnique({ where: { id }, include: { version: true } });
+    if (!type) redirectWithToast("/admin/master-data", "error", "PTT transport type was not found.");
+    if (!type.version.active) redirectWithToast("/admin/master-data", "error", "Restore the PTT Version before restoring this transport type.");
+    await prisma.pttTransportType.update({ where: { id }, data: { active: true } });
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    redirectWithToast("/admin/master-data", "error", "Could not restore the PTT transport type.");
+  }
+
+  revalidatePttApplications();
+  redirectWithToast("/admin/master-data", "success", "PTT transport type restored.");
+}
+
+export async function hardDeletePttTransportTypeAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") || "");
+  if (!id) redirectWithToast("/admin/master-data", "error", "PTT transport type id is required.");
+
+  try {
+    const type = await prisma.pttTransportType.findUnique({ where: { id } });
+    if (!type) redirectWithToast("/admin/master-data", "error", "PTT transport type was not found.");
+    if (type.active) redirectWithToast("/admin/master-data", "error", "Deactivate the PTT transport type before permanently deleting it.");
+    const usedCount = await prisma.pttApplicationRecord.count({
+      where: { versionId: type.versionId, transportType: type.name }
+    });
+    if (usedCount > 0) redirectWithToast("/admin/master-data", "error", "Cannot permanently delete a PTT transport type used by application records.");
+    await prisma.pttTransportType.delete({ where: { id } });
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    redirectWithToast("/admin/master-data", "error", "Could not permanently delete the PTT transport type.");
+  }
+
+  revalidatePttApplications();
+  redirectWithToast("/admin/master-data", "success", "PTT transport type permanently deleted.");
 }
 export async function restoreApplicationTypeAction(formData: FormData) {
   await requireAdmin();

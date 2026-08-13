@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { PERMIT_GROUP_PTC } from "@/lib/ptc";
+import { PERMIT_GROUP_PTT } from "@/lib/ptt";
 import {
   auditRecords,
   applicationSummary,
@@ -116,6 +117,17 @@ export async function getOfficeChoices(group = PERMIT_GROUP_PTC) {
   });
 }
 
+export async function getPttTransportTypes(includeInactive = false) {
+  return prisma.pttTransportType.findMany({
+    where: {
+      group: PERMIT_GROUP_PTT,
+      ...(includeInactive ? {} : { active: true, version: { active: true, group: PERMIT_GROUP_PTT } })
+    },
+    include: { version: true },
+    orderBy: [{ version: { sortOrder: "asc" } }, { sortOrder: "asc" }, { name: "asc" }]
+  });
+}
+
 export async function getReportData(options: VersionScopedOptions = {}) {
   const group = options.group ?? PERMIT_GROUP_PTC;
   const versionId = options.versionId;
@@ -216,4 +228,39 @@ export async function getReportData(options: VersionScopedOptions = {}) {
     documents: documentSummary(audits, requiredDocuments),
     combinations: documentCombinations(audits)
   };
+}
+
+export async function getPttApplicationRecords(options: VersionScopedOptions = {}) {
+  const group = options.group ?? PERMIT_GROUP_PTT;
+  const versionId = options.versionId;
+  const records = await prisma.pttApplicationRecord.findMany({
+    where: { group, ...(versionId !== undefined ? { versionId } : {}) },
+    include: {
+      version: true,
+      createdBy: true,
+      editedBy: true
+    },
+    orderBy: { createdAt: "desc" }
+  });
+
+  const duplicatePttNumbers = new Set(
+    Array.from(
+      records.reduce((map, record) => {
+        const pttNumber = String(record.pttNumber || "").trim();
+        if (!pttNumber) return map;
+        map.set(pttNumber, (map.get(pttNumber) || 0) + 1);
+        return map;
+      }, new Map<string, number>())
+    )
+      .filter(([, count]) => count > 1)
+      .map(([pttNumber]) => pttNumber)
+  );
+
+  return records.map((record) => ({
+    ...record,
+    versionName: record.version?.name || "Uncategorized",
+    createdByName: record.createdBy.name,
+    editedByName: record.editedBy?.name || "",
+    pttNumberDuplicate: !!record.pttNumber && duplicatePttNumbers.has(record.pttNumber)
+  }));
 }

@@ -14,6 +14,10 @@ const ptcNav = [
   ["Document Combinations", "/reports/document-combinations"]
 ];
 
+const pttNav = [
+  ["Applications", "/ptt/applications"]
+];
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
 
@@ -34,7 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
           <div className="nav-group">
             <div className="nav-group-title">PTT</div>
-            <span className="nav-placeholder">Coming soon</span>
+            {pttNav.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}
           </div>
           {user.role === "ADMIN" ? (
             <div className="nav-group">

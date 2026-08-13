@@ -24,47 +24,51 @@ enum DocumentRequirementMode {
 }
 
 model User {
-  id           String              @id @default(cuid())
-  name         String
-  email        String              @unique
-  passwordHash String
-  role         Role                @default(STAFF)
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
-  records      ApplicationRecord[] @relation("CreatedRecords")
-  editedRecords ApplicationRecord[] @relation("EditedRecords")
-  progress     ProgressEntry[]
-  activity     ActivityLog[]
+  id               String                 @id @default(cuid())
+  name             String
+  email            String                 @unique
+  passwordHash     String
+  role             Role                   @default(STAFF)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  records          ApplicationRecord[]    @relation("CreatedRecords")
+  editedRecords    ApplicationRecord[]    @relation("EditedRecords")
+  pttRecords       PttApplicationRecord[] @relation("CreatedPttRecords")
+  editedPttRecords PttApplicationRecord[] @relation("EditedPttRecords")
+  progress         ProgressEntry[]
+  activity         ActivityLog[]
 
   @@map("users")
 }
 
 model PtcVersion {
-  id               String              @id @default(cuid())
-  group            String              @default("PTC")
-  name             String
-  description      String?
-  active           Boolean             @default(true)
-  sortOrder        Int                 @default(0)
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
-  applicationTypes ApplicationType[]
-  records          ApplicationRecord[]
+  id                String                 @id @default(cuid())
+  group             String                 @default("PTC")
+  name              String
+  description       String?
+  active            Boolean                @default(true)
+  sortOrder         Int                    @default(0)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  applicationTypes  ApplicationType[]
+  records           ApplicationRecord[]
+  pttRecords        PttApplicationRecord[]
+  pttTransportTypes PttTransportType[]
 
   @@unique([group, name])
   @@map("ptc_versions")
 }
 
 model ApplicationType {
-  id        String               @id @default(cuid())
-  group     String               @default("PTC")
+  id        String              @id @default(cuid())
+  group     String              @default("PTC")
   versionId String
   name      String
-  active    Boolean              @default(true)
-  sortOrder Int                  @default(0)
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
-  version   PtcVersion           @relation(fields: [versionId], references: [id])
+  active    Boolean             @default(true)
+  sortOrder Int                 @default(0)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  version   PtcVersion          @relation(fields: [versionId], references: [id])
   documents RequiredDocument[]
   records   ApplicationRecord[]
 
@@ -74,15 +78,15 @@ model ApplicationType {
 }
 
 model RequiredDocument {
-  id                String          @id @default(cuid())
+  id                String                  @id @default(cuid())
   applicationTypeId String
   name              String
-  active            Boolean         @default(true)
+  active            Boolean                 @default(true)
   requirementMode   DocumentRequirementMode @default(Required)
-  sortOrder         Int             @default(0)
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  applicationType   ApplicationType @relation(fields: [applicationTypeId], references: [id], onDelete: Cascade)
+  sortOrder         Int                     @default(0)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  applicationType   ApplicationType         @relation(fields: [applicationTypeId], references: [id], onDelete: Cascade)
   progressDocuments ProgressDocument[]
 
   @@unique([applicationTypeId, name])
@@ -201,4 +205,69 @@ model ActivityLog {
   @@index([action])
   @@index([targetType, targetId])
   @@map("activity_log")
+}
+
+model PttApplicationRecord {
+  id                                  String      @id @default(cuid())
+  group                               String      @default("PTT")
+  versionId                           String?
+  pttNumber                           String?
+  dateIssued                          DateTime?
+  regionalOffice                      String?
+  provincialOffice                    String?
+  transporterName                     String?
+  transporterAddress                  String?
+  ptcNumber                           String?
+  pcaRegistrationCertificateNumber    String?
+  pcaRegistrationCertificateDate      DateTime?
+  businessAddress                     String?
+  boardFeetGranted                    Decimal?    @db.Decimal(12, 2)
+  certificateOfQuantityVolumeAttached Boolean?
+  volumeBoardFeet                     Decimal?    @db.Decimal(12, 2)
+  originOfLumber                      String?
+  destination                         String?
+  consigneeName                       String?
+  consigneePcaRegistration            String?
+  transportType                       String?
+  vehiclePlateNumber                  String?
+  authorizedDriverName                String?
+  authorizedDriverContact             String?
+  amountPaid                          Decimal?    @db.Decimal(12, 2)
+  officialReceiptNumber               String?
+  validUntil                          DateTime?
+  dateValidatedInspected              DateTime?
+  validatedInspectedBy                String?
+  issuedBy                            String?
+  remarks                             String?
+  createdById                         String
+  editedById                          String?
+  createdAt                           DateTime    @default(now())
+  updatedAt                           DateTime    @updatedAt
+  version                             PtcVersion? @relation(fields: [versionId], references: [id])
+  createdBy                           User        @relation("CreatedPttRecords", fields: [createdById], references: [id])
+  editedBy                            User?       @relation("EditedPttRecords", fields: [editedById], references: [id])
+
+  @@index([versionId])
+  @@index([group])
+  @@index([pttNumber])
+  @@index([ptcNumber])
+  @@index([editedById])
+  @@map("ptt_application_records")
+}
+
+model PttTransportType {
+  id        String     @id @default(cuid())
+  group     String     @default("PTT")
+  versionId String
+  name      String
+  active    Boolean    @default(true)
+  sortOrder Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  version   PtcVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, name])
+  @@index([group])
+  @@index([versionId])
+  @@map("ptt_transport_types")
 }

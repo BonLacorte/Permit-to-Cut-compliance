@@ -2,27 +2,37 @@ import {
   clonePtcVersionAction,
   createApplicationTypeAction,
   createProvincialOfficeAction,
+  createPttVersionAction,
+  createPttTransportTypeAction,
   createPtcVersionAction,
   createRegionalOfficeAction,
   createRequiredDocumentAction,
   deleteApplicationTypeAction,
   deleteProvincialOfficeAction,
+  deletePttVersionAction,
+  deletePttTransportTypeAction,
   deletePtcVersionAction,
   deleteRegionalOfficeAction,
   deleteRequiredDocumentAction,
   hardDeleteApplicationTypeAction,
   hardDeleteProvincialOfficeAction,
+  hardDeletePttVersionAction,
+  hardDeletePttTransportTypeAction,
   hardDeletePtcVersionAction,
   hardDeleteRegionalOfficeAction,
   hardDeleteRequiredDocumentAction,
   importPtcRecordsAction,
   restoreApplicationTypeAction,
   restoreProvincialOfficeAction,
+  restorePttVersionAction,
+  restorePttTransportTypeAction,
   restorePtcVersionAction,
   restoreRegionalOfficeAction,
   restoreRequiredDocumentAction,
   updateApplicationTypeAction,
   updateProvincialOfficeAction,
+  updatePttVersionAction,
+  updatePttTransportTypeAction,
   updatePtcVersionAction,
   updateRegionalOfficeAction,
   updateRequiredDocumentAction
@@ -32,7 +42,8 @@ import { ExportExcelButton } from "@/components/export-excel-button";
 import { SubmitButton } from "@/components/submit-button";
 import { VersionFilter } from "@/components/version-filter";
 import { requireAdmin } from "@/lib/auth";
-import { getApplicationTypesWithDocuments, getDeactivatedMasterData, getOfficeChoices, getVersionContext } from "@/lib/data";
+import { getApplicationTypesWithDocuments, getDeactivatedMasterData, getOfficeChoices, getPttTransportTypes, getVersionContext } from "@/lib/data";
+import { PERMIT_GROUP_PTT } from "@/lib/ptt";
 
 function requirementBadge(requirementMode: string) {
   if (requirementMode === "Optional") return <span className="badge neutral">Optional</span>;
@@ -52,12 +63,14 @@ function RequirementModeSelect({ defaultValue = "Required", disabled = false }: 
 export default async function MasterDataPage({ searchParams }: { searchParams?: { version?: string } }) {
   await requireAdmin();
   const versionContext = await getVersionContext(searchParams?.version);
+  const pttVersionContext = await getVersionContext(null, PERMIT_GROUP_PTT);
   const selectedVersionId = versionContext.selectedVersionId;
   const [applicationTypes, officeChoices, deactivated] = await Promise.all([
     getApplicationTypesWithDocuments({ versionId: selectedVersionId }),
     getOfficeChoices(),
     getDeactivatedMasterData()
   ]);
+  const pttTransportTypes = await getPttTransportTypes(true);
   const deactivatedCount =
     deactivated.versions.length +
     deactivated.applicationTypes.length +
@@ -145,6 +158,117 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
             <p className="muted">Choose or create an active Version before managing application types and documents.</p>
           )}
         </section>
+      </section>
+
+      <section className="panel table-wrap">
+        <div className="section-heading-row">
+          <div>
+            <h2>PTT Versions</h2>
+            <p className="muted">Manage Permit-to-Transport versions. PTT application records use these versions, but PTT document/type master data is not configured yet.</p>
+          </div>
+        </div>
+        <form action={createPttVersionAction} className="inline-edit-form">
+          <input name="name" placeholder="PTT Version name" required />
+          <input name="description" placeholder="Optional notes" />
+          <SubmitButton pendingText="Adding PTT Version...">Add PTT Version</SubmitButton>
+        </form>
+        <table>
+          <thead><tr><th>Version</th><th>Description</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>
+            {pttVersionContext.versions.map((version) => (
+              <tr key={version.id}>
+                <td>
+                  <form action={updatePttVersionAction} className="inline-edit-form">
+                    <input type="hidden" name="id" value={version.id} />
+                    <input name="name" defaultValue={version.name} required />
+                    <input name="description" defaultValue={version.description || ""} placeholder="Optional notes" />
+                    <SubmitButton className="button secondary" pendingText="Saving...">Save</SubmitButton>
+                  </form>
+                </td>
+                <td>{version.description || <span className="muted">Blank</span>}</td>
+                <td>{version.active ? <span className="badge ok">Active</span> : <span className="badge neutral">Archived</span>}</td>
+                <td>
+                  <div className="actions">
+                    {version.active ? (
+                      <ConfirmDeleteForm
+                        action={deletePttVersionAction}
+                        fields={[{ name: "id", value: version.id }]}
+                        triggerText="Deactivate"
+                        pendingText="Deactivating..."
+                        title="Deactivate PTT Version"
+                        message={`Deactivate "${version.name}"? Existing PTT records keep their assigned Version.`}
+                      />
+                    ) : (
+                      <>
+                        <ConfirmDeleteForm action={restorePttVersionAction} fields={[{ name: "id", value: version.id }]} triggerText="Restore" pendingText="Restoring..." title="Restore PTT Version" message={`Restore "${version.name}" to active PTT Versions?`} confirmText="Restore" triggerClassName="button secondary" submitClassName="button" />
+                        <ConfirmDeleteForm action={hardDeletePttVersionAction} fields={[{ name: "id", value: version.id }]} triggerText="Delete Permanently" pendingText="Deleting permanently..." title="Permanently Delete PTT Version" message={`Permanently delete "${version.name}"? This is allowed only when no PTT application records use it.`} confirmText="Delete Permanently" />
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {pttVersionContext.versions.length === 0 ? <tr><td colSpan={4}>No PTT versions configured.</td></tr> : null}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="panel table-wrap">
+        <div className="section-heading-row">
+          <div>
+            <h2>PTT Types of Transport</h2>
+            <p className="muted">Manage active and deactivated transport choices by PTT Version.</p>
+          </div>
+        </div>
+        <form action={createPttTransportTypeAction} className="inline-edit-form">
+          <select name="versionId" required>
+            <option value="">Choose PTT Version</option>
+            {pttVersionContext.activeVersions.map((version) => <option key={version.id} value={version.id}>{version.name}</option>)}
+          </select>
+          <input name="name" placeholder="Type of transport" required />
+          <SubmitButton pendingText="Adding transport type...">Add Transport Type</SubmitButton>
+        </form>
+        <table>
+          <thead><tr><th>Version</th><th>Type of Transport</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>
+            {pttTransportTypes.map((type) => (
+              <tr key={type.id}>
+                <td>{type.version.name}{type.version.active ? "" : " (Archived Version)"}</td>
+                <td>
+                  <form action={updatePttTransportTypeAction} className="inline-edit-form">
+                    <input type="hidden" name="id" value={type.id} />
+                    <select name="versionId" defaultValue={type.versionId} required>
+                      {pttVersionContext.versions.map((version) => <option key={version.id} value={version.id}>{version.name}{version.active ? "" : " (Archived)"}</option>)}
+                    </select>
+                    <input name="name" defaultValue={type.name} required />
+                    <SubmitButton className="button secondary" pendingText="Saving...">Save</SubmitButton>
+                  </form>
+                </td>
+                <td>{type.active ? <span className="badge ok">Active</span> : <span className="badge neutral">Archived</span>}</td>
+                <td>
+                  <div className="actions">
+                    {type.active ? (
+                      <ConfirmDeleteForm
+                        action={deletePttTransportTypeAction}
+                        fields={[{ name: "id", value: type.id }]}
+                        triggerText="Delete"
+                        pendingText="Deleting..."
+                        title="Delete PTT Transport Type"
+                        message={`Delete "${type.name}"? This deactivates the transport type for future PTT records.`}
+                      />
+                    ) : (
+                      <>
+                        <ConfirmDeleteForm action={restorePttTransportTypeAction} fields={[{ name: "id", value: type.id }]} triggerText="Restore" pendingText="Restoring..." title="Restore PTT Transport Type" message={`Restore "${type.name}" to active transport choices?`} confirmText="Restore" triggerClassName="button secondary" submitClassName="button" />
+                        <ConfirmDeleteForm action={hardDeletePttTransportTypeAction} fields={[{ name: "id", value: type.id }]} triggerText="Delete Permanently" pendingText="Deleting permanently..." title="Permanently Delete PTT Transport Type" message={`Permanently delete "${type.name}"? This is allowed only when no PTT application records in the same Version use it.`} confirmText="Delete Permanently" />
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {pttTransportTypes.length === 0 ? <tr><td colSpan={4}>No PTT transport types configured.</td></tr> : null}
+          </tbody>
+        </table>
       </section>
 
       <section className="grid cols-2">
