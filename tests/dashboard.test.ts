@@ -152,6 +152,25 @@ describe("dashboard metrics", () => {
     expect(filterDashboardAuditsByRegion(audits, "Region IV-A").map((audit) => audit.id)).toEqual(["r1"]);
     expect(filterDashboardAuditsByRegion(audits, "No Region").map((audit) => audit.id)).toEqual(["r4"]);
   });
+
+  it("filters PTC export audits by selected Region XIII while All remains unfiltered", () => {
+    const exportAudits = [
+      ...audits,
+      auditRecord({
+        id: "r5",
+        versionId,
+        versionName: "Old Forms",
+        applicantName: "Applicant 5",
+        applicationTypeId: "type-a",
+        applicationTypeName: "Type A",
+        regionalOffice: "Region XIII",
+        selectedDocumentIds: ["doc-a", "doc-b"]
+      }, requiredDocuments)
+    ];
+
+    expect(filterDashboardAuditsByRegion(exportAudits, "All").map((audit) => audit.id)).toEqual(["r1", "r2", "r3", "r4", "r5"]);
+    expect(filterDashboardAuditsByRegion(exportAudits, "Region XIII").map((audit) => audit.regionalOffice)).toEqual(["Region XIII"]);
+  });
   it("filters top missing documents by selected region", () => {
     const rows = topMissingDocumentsByRegion(audits, requiredDocuments);
 

@@ -81,11 +81,13 @@ describe("PTT helpers", () => {
     const records = [
       completeRecord,
       { ...completeRecord, pttNumber: "999", regionalOffice: "Region VIII" },
+      { ...completeRecord, pttNumber: "777", regionalOffice: "Region XIII" },
       { ...completeRecord, pttNumber: "888", regionalOffice: null }
     ];
 
-    expect(filterPttRecordsByRegion(records, "All")).toHaveLength(3);
+    expect(filterPttRecordsByRegion(records, "All")).toHaveLength(4);
     expect(filterPttRecordsByRegion(records, "Region IV-A").map((record) => record.pttNumber)).toEqual(["142224"]);
+    expect(filterPttRecordsByRegion(records, "Region XIII").map((record) => record.pttNumber)).toEqual(["777"]);
     expect(filterPttRecordsByRegion(records, "No Region").map((record) => record.pttNumber)).toEqual(["888"]);
   });
 

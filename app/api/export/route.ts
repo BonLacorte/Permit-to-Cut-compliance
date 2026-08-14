@@ -14,7 +14,8 @@ export async function GET(request: Request) {
   if (group === PERMIT_GROUP_PTT) {
     const versionContext = await getVersionContext(url.searchParams.get("version"), PERMIT_GROUP_PTT);
     const records = await getPttApplicationRecords({ versionId: versionContext.selectedVersionId });
-    const buffer = buildPttApplicationsWorkbook(records);
+    const filteredRecords = filterPttRecordsByRegion(records, url.searchParams.get("region") || "All");
+    const buffer = buildPttApplicationsWorkbook(filteredRecords);
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
@@ -26,7 +27,8 @@ export async function GET(request: Request) {
 
   const versionContext = await getVersionContext(url.searchParams.get("version"));
   const report = await getReportData({ versionId: versionContext.selectedVersionId });
-  const buffer = buildReportWorkbook(report.audits, report.requiredDocuments);
+  const filteredAudits = filterDashboardAuditsByRegion(report.audits, url.searchParams.get("region") || "All");
+  const buffer = buildReportWorkbook(filteredAudits, report.requiredDocuments);
 
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
