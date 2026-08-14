@@ -42,16 +42,20 @@ type Row = {
   amountPaid: string;
   amountPaidAmount: number;
   officialReceiptNumber: string;
-  validUntil: string;
+  recordedValidityDays: number | null;
+  actualValidityDays: number | null;
+  recordedValidityDisplay: string;
+  actualValidityDisplay: string;
   dateValidatedInspected: string;
   validatedInspectedBy: string;
+  issuedByDate: string;
   issuedBy: string;
   remarks: string;
   editedByName: string;
   status: PttStatus;
 };
 
-type SortKey = "versionName" | "pttNumber" | "dateIssued" | "transporterName" | "regionalOffice" | "provincialOffice" | "ptcNumber" | "volumeBoardFeetAmount" | "originOfLumber" | "destination" | "amountPaidAmount" | "officialReceiptNumber" | "validUntil" | "status" | "remarks" | "editedByName";
+type SortKey = "versionName" | "pttNumber" | "dateIssued" | "transporterName" | "regionalOffice" | "provincialOffice" | "ptcNumber" | "volumeBoardFeetAmount" | "originOfLumber" | "destination" | "amountPaidAmount" | "officialReceiptNumber" | "recordedValidityDays" | "actualValidityDays" | "status" | "remarks" | "editedByName";
 
 function compareRows(a: Row, b: Row, key: SortKey) {
   const left = a[key];
@@ -113,7 +117,8 @@ export function PttApplicationsTable({
             row.destination,
             row.amountPaid,
             row.officialReceiptNumber,
-            row.validUntil,
+            row.recordedValidityDisplay,
+            row.actualValidityDisplay,
             row.status,
             row.remarks,
             row.editedByName
@@ -174,7 +179,8 @@ export function PttApplicationsTable({
               <th><button className="th-button" onClick={() => sortBy("destination")}>Destination{sortLabel("destination")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("amountPaidAmount")}>Amount Paid{sortLabel("amountPaidAmount")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("officialReceiptNumber")}>OR Number{sortLabel("officialReceiptNumber")}</button></th>
-              <th><button className="th-button" onClick={() => sortBy("validUntil")}>Valid Until{sortLabel("validUntil")}</button></th>
+              <th><button className="th-button" onClick={() => sortBy("recordedValidityDays")}>Recorded Validity{sortLabel("recordedValidityDays")}</button></th>
+              <th><button className="th-button" onClick={() => sortBy("actualValidityDays")}>Actual Validity{sortLabel("actualValidityDays")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("status")}>Status{sortLabel("status")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("remarks")}>Remarks{sortLabel("remarks")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("editedByName")}>Edited By{sortLabel("editedByName")}</button></th>
@@ -195,14 +201,15 @@ export function PttApplicationsTable({
                 <td>{displayText(row.destination)}</td>
                 <td>{displayText(row.amountPaid)}</td>
                 <td>{displayText(row.officialReceiptNumber)}</td>
-                <td>{displayText(row.validUntil)}</td>
+                <td>{displayText(row.recordedValidityDisplay)}</td>
+                <td>{displayText(row.actualValidityDisplay)}</td>
                 <td><StatusBadge status={row.status} /></td>
                 <td>{row.remarks || <span className="muted">No remarks</span>}</td>
                 <td>{row.editedByName || <span className="muted">Blank</span>}</td>
                 <td><div className="actions compact-actions"><Link className="button secondary" href={`/ptt/applications/${row.id}`}>View</Link><button className="button secondary" type="button" onClick={() => setEditing(row)}>Edit</button><button className="button danger" type="button" onClick={() => setDeleting(row)}>Delete</button></div></td>
               </tr>
             ))}
-            {visible.length === 0 ? <tr><td colSpan={16}>No PTT records found.</td></tr> : null}
+            {visible.length === 0 ? <tr><td colSpan={17}>No PTT records found.</td></tr> : null}
           </tbody>
         </table>
       </div>

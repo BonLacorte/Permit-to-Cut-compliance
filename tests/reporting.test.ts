@@ -336,12 +336,14 @@ describe("reporting logic", () => {
       applicationTypeName: "Type A",
       selectedDocumentIds: ["a1", "a2"],
       recordedValidityDays: 10,
-      actualValidityDays: null
+      actualValidityDays: null,
+      officialReceiptNumber: "OR-123"
     }, requiredDocuments);
 
     expect(applicationExportRows([auditWithValidity])[0]).toMatchObject({
       "Recorded Validity": "10",
-      "Actual Validity": ""
+      "Actual Validity": "",
+      "Official Receipt No.": "OR-123"
     });
   });
   it("treats blank fees as zero when comparing fees", () => {

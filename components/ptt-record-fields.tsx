@@ -40,9 +40,11 @@ type PttRecordFieldsProps = {
     authorizedDriverContact?: string | null;
     amountPaid?: string | number | null;
     officialReceiptNumber?: string | null;
-    validUntil?: string | null;
+    recordedValidityDays?: string | number | null;
+    actualValidityDays?: string | number | null;
     dateValidatedInspected?: string | null;
     validatedInspectedBy?: string | null;
+    issuedByDate?: string | null;
     issuedBy?: string | null;
   };
 };
@@ -200,8 +202,12 @@ export function PttRecordFields({ defaults, officeChoices, transportTypes, versi
             <input id="officialReceiptNumber" name="officialReceiptNumber" defaultValue={defaults?.officialReceiptNumber || ""} />
           </div>
           <div className="field">
-            <label htmlFor="validUntil">Valid Until</label>
-            <input id="validUntil" name="validUntil" type="date" defaultValue={defaults?.validUntil || ""} />
+            <label htmlFor="recordedValidityDays">Recorded Validity</label>
+            <input id="recordedValidityDays" name="recordedValidityDays" type="number" min="0" step="1" defaultValue={numberDefault(defaults?.recordedValidityDays)} />
+          </div>
+          <div className="field">
+            <label htmlFor="actualValidityDays">Actual Validity</label>
+            <input id="actualValidityDays" name="actualValidityDays" type="number" min="0" step="1" defaultValue={numberDefault(defaults?.actualValidityDays)} />
           </div>
           <div className="field">
             <label htmlFor="dateValidatedInspected">Date Validated/Inspected</label>
@@ -210,6 +216,10 @@ export function PttRecordFields({ defaults, officeChoices, transportTypes, versi
           <div className="field">
             <label htmlFor="validatedInspectedBy">Validated/Inspected By</label>
             <input id="validatedInspectedBy" name="validatedInspectedBy" defaultValue={defaults?.validatedInspectedBy || ""} />
+          </div>
+          <div className="field">
+            <label htmlFor="issuedByDate">Issued By Date</label>
+            <input id="issuedByDate" name="issuedByDate" type="date" defaultValue={defaults?.issuedByDate || ""} />
           </div>
           <div className="field">
             <label htmlFor="issuedBy">Issued By</label>

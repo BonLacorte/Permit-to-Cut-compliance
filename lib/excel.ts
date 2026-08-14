@@ -41,9 +41,11 @@ export const PTT_IMPORT_COLUMNS = [
   "Authorized Driver Contact",
   "Amount Paid",
   "OR Number",
-  "Valid Until",
+  "Recorded Validity",
+  "Actual Validity",
   "Date Validated/Inspected",
   "Validated/Inspected By",
+  "Issued By Date",
   "Issued By",
   "Remarks"
 ] as const;
@@ -72,9 +74,11 @@ export type ParsedPttRecord = {
   authorizedDriverContact?: string;
   amountPaid?: string;
   officialReceiptNumber?: string;
-  validUntil?: Date;
+  recordedValidityDays?: number;
+  actualValidityDays?: number;
   dateValidatedInspected?: Date;
   validatedInspectedBy?: string;
+  issuedByDate?: Date;
   issuedBy?: string;
   remarks?: string;
 };
@@ -197,11 +201,13 @@ export function parsePttRecordsWorkbook(buffer: Buffer): ParsedPttRecord[] {
       authorizedDriverContact: cellText(row[20]) || undefined,
       amountPaid: parseDecimalCell(row[21]),
       officialReceiptNumber: cellText(row[22]) || undefined,
-      validUntil: parseDateCell(row[23]),
-      dateValidatedInspected: parseDateCell(row[24]),
-      validatedInspectedBy: cellText(row[25]) || undefined,
-      issuedBy: cellText(row[26]) || undefined,
-      remarks: cellText(row[27]) || undefined
+      recordedValidityDays: parseNumberCell(row[23]),
+      actualValidityDays: parseNumberCell(row[24]),
+      dateValidatedInspected: parseDateCell(row[25]),
+      validatedInspectedBy: cellText(row[26]) || undefined,
+      issuedByDate: parseDateCell(row[27]),
+      issuedBy: cellText(row[28]) || undefined,
+      remarks: cellText(row[29]) || undefined
     }));
 }
 

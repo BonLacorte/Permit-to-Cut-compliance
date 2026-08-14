@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { EditPttApplicationButton } from "@/components/edit-ptt-application-button";
 import { StatusBadge } from "@/components/status-badge";
 import { getOfficeChoices, getPttTransportTypes, getVersionContext } from "@/lib/data";
-import { formatDate, formatFee } from "@/lib/ptc";
+import { formatDate, formatFee, formatValidityDays } from "@/lib/ptc";
 import { displayPttName, formatPttBoolean, formatPttNumber, PERMIT_GROUP_PTT, pttStatus } from "@/lib/ptt";
 import { prisma } from "@/lib/prisma";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
@@ -69,9 +69,11 @@ export default async function PttApplicationDetailPage({ params }: { params: { i
             authorizedDriverContact: record.authorizedDriverContact || "",
             amountPaid: formNumberValue(record.amountPaid),
             officialReceiptNumber: record.officialReceiptNumber || "",
-            validUntil: formatDate(record.validUntil),
+            recordedValidityDays: formNumberValue(record.recordedValidityDays),
+            actualValidityDays: formNumberValue(record.actualValidityDays),
             dateValidatedInspected: formatDate(record.dateValidatedInspected),
             validatedInspectedBy: record.validatedInspectedBy || "",
+            issuedByDate: formatDate(record.issuedByDate),
             issuedBy: record.issuedBy || ""
           }}
           officeChoices={officeChoices.map((office) => ({
@@ -128,9 +130,11 @@ export default async function PttApplicationDetailPage({ params }: { params: { i
           <div><span>Authorized Driver Contact</span><strong>{metadataValue(record.authorizedDriverContact || "")}</strong></div>
           <div><span>Amount Paid</span><strong>{formatFee(record.amountPaid)}</strong></div>
           <div><span>Official Receipt Number</span><strong>{metadataValue(record.officialReceiptNumber || "")}</strong></div>
-          <div><span>Valid Until</span><strong>{metadataValue(formatDate(record.validUntil))}</strong></div>
+          <div><span>Recorded Validity</span><strong>{metadataValue(formatValidityDays(record.recordedValidityDays))}</strong></div>
+          <div><span>Actual Validity</span><strong>{metadataValue(formatValidityDays(record.actualValidityDays))}</strong></div>
           <div><span>Date Validated/Inspected</span><strong>{metadataValue(formatDate(record.dateValidatedInspected))}</strong></div>
           <div><span>Validated/Inspected By</span><strong>{metadataValue(record.validatedInspectedBy || "")}</strong></div>
+          <div><span>Issued By Date</span><strong>{metadataValue(formatDate(record.issuedByDate))}</strong></div>
           <div><span>Issued By</span><strong>{metadataValue(record.issuedBy || "")}</strong></div>
           <div><span>Edited By</span><strong>{metadataValue(record.editedBy?.name || "")}</strong></div>
         </div>

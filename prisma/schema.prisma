@@ -141,6 +141,7 @@ model ApplicationRecord {
   actualValidityDays   Int?
   actualFee            Decimal?           @db.Decimal(12, 2)
   recordedFee          Decimal?           @db.Decimal(12, 2)
+  officialReceiptNumber String?
   replantedSeedlings   Boolean?
   locExemption         LocExemption?
   recommendingApproval String?
@@ -236,9 +237,12 @@ model PttApplicationRecord {
   authorizedDriverContact             String?
   amountPaid                          Decimal?    @db.Decimal(12, 2)
   officialReceiptNumber               String?
+  recordedValidityDays                Int?
+  actualValidityDays                  Int?
   validUntil                          DateTime?
   dateValidatedInspected              DateTime?
   validatedInspectedBy                String?
+  issuedByDate                        DateTime?
   issuedBy                            String?
   remarks                             String?
   createdById                         String

@@ -35,9 +35,11 @@ type RecordDetails = {
   authorizedDriverContact?: string | null;
   amountPaid?: string | number | null;
   officialReceiptNumber?: string | null;
-  validUntil?: string | null;
+  recordedValidityDays?: string | number | null;
+  actualValidityDays?: string | number | null;
   dateValidatedInspected?: string | null;
   validatedInspectedBy?: string | null;
+  issuedByDate?: string | null;
   issuedBy?: string | null;
 };
 

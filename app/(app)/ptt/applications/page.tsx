@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PttApplicationsTable } from "@/components/ptt-applications-table";
 import { VersionFilter } from "@/components/version-filter";
 import { getOfficeChoices, getPttApplicationRecords, getPttTransportTypes, getVersionContext } from "@/lib/data";
-import { decimalOrZero, formatDate } from "@/lib/ptc";
+import { decimalOrZero, formatDate, formatValidityDays } from "@/lib/ptc";
 import { formatPttBoolean, PERMIT_GROUP_PTT, pttStatus } from "@/lib/ptt";
 
 function formNumberValue(value: unknown) {
@@ -49,9 +49,13 @@ export default async function PttApplicationsPage({ searchParams }: { searchPara
     amountPaid: formNumberValue(record.amountPaid),
     amountPaidAmount: decimalOrZero(record.amountPaid),
     officialReceiptNumber: record.officialReceiptNumber || "",
-    validUntil: formatDate(record.validUntil),
+    recordedValidityDays: record.recordedValidityDays ?? null,
+    actualValidityDays: record.actualValidityDays ?? null,
+    recordedValidityDisplay: formatValidityDays(record.recordedValidityDays),
+    actualValidityDisplay: formatValidityDays(record.actualValidityDays),
     dateValidatedInspected: formatDate(record.dateValidatedInspected),
     validatedInspectedBy: record.validatedInspectedBy || "",
+    issuedByDate: formatDate(record.issuedByDate),
     issuedBy: record.issuedBy || "",
     remarks: record.remarks || "",
     editedByName: record.editedByName || "",

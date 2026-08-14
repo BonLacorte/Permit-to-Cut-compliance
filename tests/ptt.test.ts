@@ -21,7 +21,11 @@ const completeRecord = {
   vehiclePlateNumber: "CAF-5164",
   amountPaid: "3000",
   officialReceiptNumber: "6110665 W",
-  validUntil: new Date("2026-05-11T00:00:00.000Z"),
+  recordedValidityDays: 3,
+  actualValidityDays: null,
+  dateValidatedInspected: new Date("2026-05-11T00:00:00.000Z"),
+  validatedInspectedBy: "ARVIN RAFAEL SG. LIZARDO",
+  issuedByDate: new Date("2026-05-11T00:00:00.000Z"),
   issuedBy: "GABBY SCHYLER B. GALANG",
   remarks: "Sample record",
   editedByName: "Admin User",
@@ -45,9 +49,14 @@ describe("PTT helpers", () => {
     ]);
   });
 
-  it("marks complete records as Complete with required offices and transport type", () => {
+  it("marks complete records as Complete with required offices, transport type, and recorded validity", () => {
     expect(pttStatus(completeRecord)).toBe("Complete");
     expect(missingPttCompletionFields(completeRecord)).toEqual([]);
+  });
+
+  it("requires Recorded Validity but not Actual Validity for completion", () => {
+    expect(missingPttCompletionFields({ ...completeRecord, recordedValidityDays: null })).toContain("recordedValidityDays");
+    expect(pttStatus({ ...completeRecord, actualValidityDays: null })).toBe("Complete");
   });
 
   it("does not require Consignee Name for completion", () => {
@@ -60,7 +69,7 @@ describe("PTT helpers", () => {
     expect(hasPttSourceReference({ ptcNumber: "", pcaRegistrationCertificateNumber: "" })).toBe(false);
   });
 
-  it("exports PTT rows with status and duplicate flag", () => {
+  it("exports PTT rows with status, duplicate flag, validity, and issued-by date", () => {
     expect(pttExportRows([completeRecord])[0]).toMatchObject({
       "PTT Number": "142224",
       "Duplicate PTT Number": "Yes",
@@ -69,9 +78,13 @@ describe("PTT helpers", () => {
       "Provincial Office": "Quezon I",
       "PTC Number": "1360372",
       "Amount Paid": "3,000",
+      "Recorded Validity": "3",
+      "Actual Validity": "",
+      "Issued By Date": "2026-05-11",
       Status: "Complete",
       "Edited By": "Admin User"
     });
+    expect(pttExportRows([completeRecord])[0]).not.toHaveProperty("Valid Until");
     expect(pttExportRows([completeRecord])[0]).not.toHaveProperty("Province");
     expect(pttExportRows([completeRecord])[0]).not.toHaveProperty("Validated/Inspected By Designation");
     expect(pttExportRows([completeRecord])[0]).not.toHaveProperty("Issued By Designation");
@@ -119,9 +132,11 @@ describe("PTT helpers", () => {
         "09170000000",
         "3,000",
         "6110665 W",
-        "2026-05-12",
+        3,
+        "",
         "2026-05-10",
         "Inspector",
+        "2026-05-11",
         "Issuer",
         "Imported remarks"
       ]
@@ -139,6 +154,9 @@ describe("PTT helpers", () => {
       volumeBoardFeet: "2500",
       transportType: "10 WHEELER",
       amountPaid: "3000",
+      recordedValidityDays: 3,
+      actualValidityDays: undefined,
+      issuedByDate: new Date("2026-05-11T00:00:00.000Z"),
       consigneeName: undefined,
       remarks: "Imported remarks"
     });
@@ -148,5 +166,9 @@ describe("PTT helpers", () => {
     const workbook = XLSX.read(buildPttImportTemplateWorkbook(), { type: "buffer" });
     const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets["PTT Import"], { header: 1 });
     expect(rows[0]).toEqual([...PTT_IMPORT_COLUMNS]);
+    expect(rows[0]).toContain("Recorded Validity");
+    expect(rows[0]).toContain("Actual Validity");
+    expect(rows[0]).toContain("Issued By Date");
+    expect(rows[0]).not.toContain("Valid Until");
   });
 });

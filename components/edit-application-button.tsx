@@ -29,6 +29,7 @@ type RecordDetails = {
   actualValidityDays?: number | null;
   actualFee?: string | number | null;
   recordedFee?: string | number | null;
+  officialReceiptNumber?: string | null;
   replantedSeedlings?: boolean | null;
   locExemption?: "Owner" | "Others" | null;
   recommendingApproval?: string | null;

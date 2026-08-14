@@ -39,6 +39,7 @@ export type RecordRef = {
   actualValidityDays?: number | null;
   actualFee?: unknown;
   recordedFee?: unknown;
+  officialReceiptNumber?: string | null;
   replantedSeedlings?: boolean | null;
   locExemption?: LocExemptionValue;
   recommendingApproval?: string | null;
@@ -260,6 +261,7 @@ export function applicationExportRows(audits: RecordAudit[]) {
     Missing: audit.missingCount,
     "Actual Fee": formatFee(audit.actualFee),
     "Recorded Fee": formatFee(audit.recordedFee),
+    "Official Receipt No.": audit.officialReceiptNumber || "",
     "Fee Difference": formatSignedFeeDifference(audit),
     "Fees Match": feesMatchDisplay(audit),
     "Replanted Seedlings": displayReplantedSeedlings(audit.replantedSeedlings),

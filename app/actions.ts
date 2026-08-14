@@ -129,6 +129,7 @@ function ptcRecordData(formData: FormData) {
     actualValidityDays: nullableInt(formData.get("actualValidityDays")),
     actualFee: nullableDecimal(formData.get("actualFee")),
     recordedFee: nullableDecimal(formData.get("recordedFee")),
+    officialReceiptNumber: nullableString(formData.get("officialReceiptNumber")),
     replantedSeedlings: nullableBoolean(formData.get("replantedSeedlings")),
     locExemption: nullableLocExemption(formData.get("locExemption")),
     recommendingApproval: nullableString(formData.get("recommendingApproval")),
@@ -161,9 +162,11 @@ function pttRecordData(formData: FormData) {
     authorizedDriverContact: nullableString(formData.get("authorizedDriverContact")),
     amountPaid: nullableDecimal(formData.get("amountPaid")),
     officialReceiptNumber: nullableString(formData.get("officialReceiptNumber")),
-    validUntil: nullableDate(formData.get("validUntil")),
+    recordedValidityDays: nullableInt(formData.get("recordedValidityDays")),
+    actualValidityDays: nullableInt(formData.get("actualValidityDays")),
     dateValidatedInspected: nullableDate(formData.get("dateValidatedInspected")),
     validatedInspectedBy: nullableString(formData.get("validatedInspectedBy")),
+    issuedByDate: nullableDate(formData.get("issuedByDate")),
     issuedBy: nullableString(formData.get("issuedBy")),
     remarks: nullableString(formData.get("remarks"))
   };
@@ -1725,9 +1728,11 @@ export async function importPttRecordsAction(formData: FormData) {
     authorizedDriverContact: record.authorizedDriverContact || null,
     amountPaid: record.amountPaid ?? null,
     officialReceiptNumber: record.officialReceiptNumber || null,
-    validUntil: record.validUntil || null,
+    recordedValidityDays: record.recordedValidityDays ?? null,
+    actualValidityDays: record.actualValidityDays ?? null,
     dateValidatedInspected: record.dateValidatedInspected || null,
     validatedInspectedBy: record.validatedInspectedBy || null,
+    issuedByDate: record.issuedByDate || null,
     issuedBy: record.issuedBy || null,
     remarks: record.remarks || null
   }));

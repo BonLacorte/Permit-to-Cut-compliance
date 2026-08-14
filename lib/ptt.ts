@@ -1,4 +1,4 @@
-import { formatDate, formatFee } from "@/lib/ptc";
+import { formatDate, formatFee, formatValidityDays } from "@/lib/ptc";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
 
 export const PERMIT_GROUP_PTT = "PTT";
@@ -33,9 +33,12 @@ export type PttDisplayRecord = {
   authorizedDriverContact?: string | null;
   amountPaid?: unknown;
   officialReceiptNumber?: string | null;
+  recordedValidityDays?: number | string | null;
+  actualValidityDays?: number | string | null;
   validUntil?: Date | string | null;
   dateValidatedInspected?: Date | string | null;
   validatedInspectedBy?: string | null;
+  issuedByDate?: Date | string | null;
   issuedBy?: string | null;
   remarks?: string | null;
   editedByName?: string | null;
@@ -54,10 +57,11 @@ const requiredTextFields: Array<keyof PttDisplayRecord> = [
   "vehiclePlateNumber",
   "amountPaid",
   "officialReceiptNumber",
+  "recordedValidityDays",
   "issuedBy"
 ];
 
-const requiredDateFields: Array<keyof PttDisplayRecord> = ["dateIssued", "validUntil"];
+const requiredDateFields: Array<keyof PttDisplayRecord> = ["dateIssued"];
 
 const meaningfulFields: Array<keyof PttDisplayRecord> = [
   "pttNumber",
@@ -76,7 +80,7 @@ const meaningfulFields: Array<keyof PttDisplayRecord> = [
   "vehiclePlateNumber",
   "amountPaid",
   "officialReceiptNumber",
-  "validUntil",
+  "recordedValidityDays",
   "issuedBy"
 ];
 
@@ -172,9 +176,11 @@ export function pttExportRows(records: PttDisplayRecord[]) {
     "Authorized Driver Contact": record.authorizedDriverContact || "",
     "Amount Paid": formatFee(record.amountPaid),
     "OR Number": record.officialReceiptNumber || "",
-    "Valid Until": formatDate(record.validUntil),
+    "Recorded Validity": formatValidityDays(record.recordedValidityDays),
+    "Actual Validity": formatValidityDays(record.actualValidityDays),
     "Date Validated/Inspected": formatDate(record.dateValidatedInspected),
     "Validated/Inspected By": record.validatedInspectedBy || "",
+    "Issued By Date": formatDate(record.issuedByDate),
     "Issued By": record.issuedBy || "",
     Status: pttStatus(record),
     Remarks: record.remarks || "",

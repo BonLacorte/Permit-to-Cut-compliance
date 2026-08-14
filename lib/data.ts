@@ -214,6 +214,7 @@ export async function getReportData(options: VersionScopedOptions = {}) {
     actualValidityDays: record.actualValidityDays,
     actualFee: record.actualFee,
     recordedFee: record.recordedFee,
+    officialReceiptNumber: record.officialReceiptNumber,
     replantedSeedlings: record.replantedSeedlings,
     locExemption: record.locExemption,
     recommendingApproval: record.recommendingApproval,

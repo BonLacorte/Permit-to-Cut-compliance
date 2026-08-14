@@ -80,6 +80,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
             actualValidityDays: record.actualValidityDays,
             actualFee: formNumberValue(record.actualFee),
             recordedFee: formNumberValue(record.recordedFee),
+            officialReceiptNumber: record.officialReceiptNumber || "",
             replantedSeedlings: record.replantedSeedlings,
             locExemption: record.locExemption,
             recommendingApproval: record.recommendingApproval || "",
@@ -138,6 +139,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
           <div><span>Recorded Fee</span><strong>{formatFee(record.recordedFee)}</strong></div>
           <div><span>Fee Difference</span><strong>{formatSignedFeeDifference(record)}</strong></div>
           <div><span>Fees Match</span><strong>{feesMatch(record) ? "Yes" : "No"}</strong></div>
+          <div><span>Official Receipt No.</span><strong>{metadataValue(record.officialReceiptNumber || "")}</strong></div>
           <div><span>Replanted Seedlings</span><strong>{metadataValue(displayReplantedSeedlings(record.replantedSeedlings))}</strong></div>
           <div><span>LOC Exemption</span><strong>{metadataValue(displayLocExemption(record.locExemption))}</strong></div>
           <div><span>Recommending Approval</span><strong>{metadataValue(record.recommendingApproval || "")}</strong></div>

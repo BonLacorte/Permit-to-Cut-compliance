@@ -19,6 +19,7 @@ type PtcRecordFieldsProps = {
     actualValidityDays?: number | null;
     actualFee?: string | number | null;
     recordedFee?: string | number | null;
+    officialReceiptNumber?: string | null;
     replantedSeedlings?: boolean | null;
     locExemption?: "Owner" | "Others" | null;
     recommendingApproval?: string | null;
@@ -52,14 +53,6 @@ export function PtcRecordFields({ defaults, officeChoices }: PtcRecordFieldsProp
         <div className="field">
           <label htmlFor="ptcNumber">PTC Number</label>
           <input id="ptcNumber" name="ptcNumber" defaultValue={defaults?.ptcNumber || ""} />
-        </div>
-        <div className="field">
-          <label htmlFor="recordedValidityDays">Recorded Validity</label>
-          <input id="recordedValidityDays" name="recordedValidityDays" type="number" min="0" step="1" defaultValue={numberDefault(defaults?.recordedValidityDays)} />
-        </div>
-        <div className="field">
-          <label htmlFor="actualValidityDays">Actual Validity</label>
-          <input id="actualValidityDays" name="actualValidityDays" type="number" min="0" step="1" defaultValue={numberDefault(defaults?.actualValidityDays)} />
         </div>
         <div className="field">
           <label htmlFor="regionalOffice">Regional Office</label>
@@ -101,14 +94,6 @@ export function PtcRecordFields({ defaults, officeChoices }: PtcRecordFieldsProp
           <input id="seedlingsReplacement" name="seedlingsReplacement" type="number" min="0" defaultValue={defaults?.seedlingsReplacement ?? ""} />
         </div>
         <div className="field">
-          <label htmlFor="actualFee">Actual Fee</label>
-          <input id="actualFee" name="actualFee" type="number" min="0" step="0.01" defaultValue={feeDefault(defaults?.actualFee)} />
-        </div>
-        <div className="field">
-          <label htmlFor="recordedFee">Recorded Fee</label>
-          <input id="recordedFee" name="recordedFee" type="number" min="0" step="0.01" defaultValue={feeDefault(defaults?.recordedFee)} />
-        </div>
-        <div className="field">
           <label htmlFor="replantedSeedlings">Replanted Seedlings</label>
           <select id="replantedSeedlings" name="replantedSeedlings" defaultValue={defaults?.replantedSeedlings === true ? "true" : defaults?.replantedSeedlings === false ? "false" : ""}>
             <option value="">Blank</option>
@@ -117,12 +102,32 @@ export function PtcRecordFields({ defaults, officeChoices }: PtcRecordFieldsProp
           </select>
         </div>
         <div className="field">
+          <label htmlFor="recordedFee">Recorded Fee</label>
+          <input id="recordedFee" name="recordedFee" type="number" min="0" step="0.01" defaultValue={feeDefault(defaults?.recordedFee)} />
+        </div>
+        <div className="field">
+          <label htmlFor="actualFee">Actual Fee</label>
+          <input id="actualFee" name="actualFee" type="number" min="0" step="0.01" defaultValue={feeDefault(defaults?.actualFee)} />
+        </div>
+        <div className="field">
+          <label htmlFor="recordedValidityDays">Recorded Validity</label>
+          <input id="recordedValidityDays" name="recordedValidityDays" type="number" min="0" step="1" defaultValue={numberDefault(defaults?.recordedValidityDays)} />
+        </div>
+        <div className="field">
+          <label htmlFor="actualValidityDays">Actual Validity</label>
+          <input id="actualValidityDays" name="actualValidityDays" type="number" min="0" step="1" defaultValue={numberDefault(defaults?.actualValidityDays)} />
+        </div>
+        <div className="field">
           <label htmlFor="locExemption">LOC Exemption</label>
           <select id="locExemption" name="locExemption" defaultValue={defaults?.locExemption || ""}>
             <option value="">Blank</option>
             <option value="Owner">Owner</option>
             <option value="Others">Others</option>
           </select>
+        </div>
+        <div className="field">
+          <label htmlFor="officialReceiptNumber">Official Receipt No.</label>
+          <input id="officialReceiptNumber" name="officialReceiptNumber" defaultValue={defaults?.officialReceiptNumber || ""} />
         </div>
         <div className="field">
           <label htmlFor="recommendingApproval">Recommending Approval</label>
