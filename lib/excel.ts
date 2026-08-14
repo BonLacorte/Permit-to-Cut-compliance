@@ -17,6 +17,68 @@ export type ParsedPtcRecord = {
   locExemption?: "Owner" | "Others";
 };
 
+export const PTT_IMPORT_COLUMNS = [
+  "Regional Office",
+  "Provincial Office",
+  "PTT Number",
+  "Date Issued",
+  "Name",
+  "Transporter Address",
+  "PTC Number",
+  "PCA Registration Certificate Number",
+  "PCA Registration Certificate Date",
+  "Business Address",
+  "Board Feet Granted",
+  "Certificate of Quantity/Volume Attached",
+  "Volume",
+  "Origin",
+  "Destination",
+  "Consignee Name",
+  "Consignee PCA Registration",
+  "Type of Transport Used",
+  "Plate/Container/Vessel Number",
+  "Authorized Driver Name",
+  "Authorized Driver Contact",
+  "Amount Paid",
+  "OR Number",
+  "Valid Until",
+  "Date Validated/Inspected",
+  "Validated/Inspected By",
+  "Issued By",
+  "Remarks"
+] as const;
+
+export type ParsedPttRecord = {
+  regionalOffice?: string;
+  provincialOffice?: string;
+  pttNumber?: string;
+  dateIssued?: Date;
+  transporterName?: string;
+  transporterAddress?: string;
+  ptcNumber?: string;
+  pcaRegistrationCertificateNumber?: string;
+  pcaRegistrationCertificateDate?: Date;
+  businessAddress?: string;
+  boardFeetGranted?: string;
+  certificateOfQuantityVolumeAttached?: boolean;
+  volumeBoardFeet?: string;
+  originOfLumber?: string;
+  destination?: string;
+  consigneeName?: string;
+  consigneePcaRegistration?: string;
+  transportType?: string;
+  vehiclePlateNumber?: string;
+  authorizedDriverName?: string;
+  authorizedDriverContact?: string;
+  amountPaid?: string;
+  officialReceiptNumber?: string;
+  validUntil?: Date;
+  dateValidatedInspected?: Date;
+  validatedInspectedBy?: string;
+  issuedBy?: string;
+  remarks?: string;
+};
+
 export function parseGroundsWorkbook(buffer: Buffer) {
   const workbook = XLSX.read(buffer, { type: "buffer" });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -47,6 +109,21 @@ function parseNumberCell(value: unknown) {
   if (value === null || value === undefined || value === "") return undefined;
   const parsed = Number(String(value).replace(/,/g, "").trim());
   return Number.isFinite(parsed) ? Math.trunc(parsed) : undefined;
+}
+
+function parseDecimalCell(value: unknown) {
+  if (value === null || value === undefined || value === "") return undefined;
+  const text = String(value).replace(/,/g, "").trim();
+  if (!text) return undefined;
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? text : undefined;
+}
+
+function parseBooleanCell(value: unknown) {
+  const text = cellText(value).toLowerCase();
+  if (["yes", "true", "1", "y"].includes(text)) return true;
+  if (["no", "false", "0", "n"].includes(text)) return false;
+  return undefined;
 }
 
 
@@ -90,6 +167,44 @@ export function parsePtcRecordsWorkbook(buffer: Buffer): ParsedPtcRecord[] {
   }));
 }
 
+export function parsePttRecordsWorkbook(buffer: Buffer): ParsedPttRecord[] {
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: true });
+  return rows.slice(1)
+    .filter((row) => row.some((cell) => cellText(cell)))
+    .map((row) => ({
+      regionalOffice: cellText(row[0]) || undefined,
+      provincialOffice: cellText(row[1]) || undefined,
+      pttNumber: cellText(row[2]) || undefined,
+      dateIssued: parseDateCell(row[3]),
+      transporterName: cellText(row[4]) || undefined,
+      transporterAddress: cellText(row[5]) || undefined,
+      ptcNumber: cellText(row[6]) || undefined,
+      pcaRegistrationCertificateNumber: cellText(row[7]) || undefined,
+      pcaRegistrationCertificateDate: parseDateCell(row[8]),
+      businessAddress: cellText(row[9]) || undefined,
+      boardFeetGranted: parseDecimalCell(row[10]),
+      certificateOfQuantityVolumeAttached: parseBooleanCell(row[11]),
+      volumeBoardFeet: parseDecimalCell(row[12]),
+      originOfLumber: cellText(row[13]) || undefined,
+      destination: cellText(row[14]) || undefined,
+      consigneeName: cellText(row[15]) || undefined,
+      consigneePcaRegistration: cellText(row[16]) || undefined,
+      transportType: cellText(row[17]) || undefined,
+      vehiclePlateNumber: cellText(row[18]) || undefined,
+      authorizedDriverName: cellText(row[19]) || undefined,
+      authorizedDriverContact: cellText(row[20]) || undefined,
+      amountPaid: parseDecimalCell(row[21]),
+      officialReceiptNumber: cellText(row[22]) || undefined,
+      validUntil: parseDateCell(row[23]),
+      dateValidatedInspected: parseDateCell(row[24]),
+      validatedInspectedBy: cellText(row[25]) || undefined,
+      issuedBy: cellText(row[26]) || undefined,
+      remarks: cellText(row[27]) || undefined
+    }));
+}
+
 export function buildReportWorkbook(audits: RecordAudit[], requiredDocuments: RequiredDocumentRef[]) {
   const workbook = XLSX.utils.book_new();
   const completion = completionSummary(audits);
@@ -125,5 +240,12 @@ export function buildReportWorkbook(audits: RecordAudit[], requiredDocuments: Re
 export function buildPttApplicationsWorkbook(records: PttDisplayRecord[]) {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(pttExportRows(records)), "PTT Applications");
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
+}
+
+export function buildPttImportTemplateWorkbook() {
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([[...PTT_IMPORT_COLUMNS]]);
+  XLSX.utils.book_append_sheet(workbook, sheet, "PTT Import");
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
 }

@@ -22,6 +22,7 @@ import {
   hardDeleteRegionalOfficeAction,
   hardDeleteRequiredDocumentAction,
   importPtcRecordsAction,
+  importPttRecordsAction,
   restoreApplicationTypeAction,
   restoreProvincialOfficeAction,
   restorePttVersionAction,
@@ -77,19 +78,21 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
     deactivated.requiredDocuments.length +
     deactivated.regionalOffices.length +
     deactivated.provincialOffices.length;
+  const exportRegions = Array.from(new Set([...officeChoices.map((office) => office.name), "No Region"]));
 
   return (
     <div className="grid">
       <div className="topbar">
         <div>
           <h1>Master Data</h1>
-          <p className="muted">Manage PTC versions, application types, required documents, offices, imports, and report exports.</p>
+          <p className="muted">Manage PTC, PTT, shared offices, imports, and regional exports from one control center.</p>
         </div>
         <div className="actions">
           <VersionFilter path="/admin/master-data" selected={versionContext.selectedVersionParam} options={versionContext.options} />
-          <ExportExcelButton versionId={versionContext.selectedVersionParam} />
         </div>
       </div>
+
+      <div className="master-data-group-title"><h2>PTC Master Data</h2><p className="muted">Manage PTC versions, application types, and document requirements.</p></div>
 
       <section className="grid cols-2">
         <form action={createPtcVersionAction} className="panel form">
@@ -159,6 +162,8 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
           )}
         </section>
       </section>
+
+      <div className="master-data-group-title"><h2>PTT Master Data</h2><p className="muted">Manage PTT versions and transport type choices.</p></div>
 
       <section className="panel table-wrap">
         <div className="section-heading-row">
@@ -271,6 +276,8 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
         </table>
       </section>
 
+      <div className="master-data-group-title"><h2>PTC Application Types and Documents</h2><p className="muted">Manage active PTC choices for the selected Version.</p></div>
+
       <section className="grid cols-2">
         <form action={createApplicationTypeAction} className="panel form">
           <h2>Add Application Type</h2>
@@ -358,6 +365,8 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
           </tbody>
         </table>
       </section>
+
+      <div className="master-data-group-title"><h2>Shared Master Data</h2><p className="muted">Regional and provincial offices are reused by both PTC and PTT records.</p></div>
 
       <section className="grid cols-2">
         <form action={createRegionalOfficeAction} className="panel form">
@@ -507,6 +516,8 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
         </table>
       </section>
 
+      <div className="master-data-group-title"><h2>Imports and Exports</h2><p className="muted">Import records and export Excel workbooks by Version and Region.</p></div>
+
       <section className="grid cols-2">
         <form action={importPtcRecordsAction} className="panel form">
           <h2>Import PTC Excel File</h2>
@@ -531,10 +542,50 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
           <SubmitButton pendingText="Importing PTC records...">Import PTC Excel File</SubmitButton>
         </form>
 
-        <div className="panel form disabled-panel">
-          <h2>Import PTT Excel File</h2>
-          <p className="muted">Coming soon. The PTT import workflow will be implemented in a future batch after the PTT record rules are finalized.</p>
-        </div>
+        <form action={importPttRecordsAction} className="panel form">
+          <div className="section-heading-row">
+            <div>
+              <h2>Import PTT Excel File</h2>
+              <p className="muted">Import Permit-to-Transport records into the selected PTT Version.</p>
+            </div>
+            <a className="button secondary" href="/api/import-template?group=PTT">Download Template</a>
+          </div>
+          <div className="instruction-box">
+            <p><strong>Template columns:</strong></p>
+            <p className="muted">Regional Office, Provincial Office, PTT Number, Date Issued, Name, transport details, fees, validity, issuing details, and Remarks.</p>
+            <p className="muted">Dates may be Excel dates or readable date strings. Yes/No and True/False are accepted for Certificate of Quantity/Volume Attached.</p>
+          </div>
+          <div className="field">
+            <label htmlFor="pttImportVersionId">Import PTT Version</label>
+            <select id="pttImportVersionId" name="versionId" required>
+              <option value="">Choose PTT Version</option>
+              {pttVersionContext.activeVersions.map((version) => <option key={version.id} value={version.id}>{version.name}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="pttFile">PTT Excel file</label>
+            <input id="pttFile" name="file" type="file" accept=".xlsx,.xls" required />
+          </div>
+          <SubmitButton pendingText="Importing PTT records...">Import PTT Excel File</SubmitButton>
+        </form>
+      </section>
+
+      <section className="grid cols-2">
+        <section className="panel form">
+          <h2>Export PTC Records</h2>
+          <p className="muted">Exports the selected PTC Version. Region filtering applies to all workbook sheets.</p>
+          <ExportExcelButton versionId={versionContext.selectedVersionParam} regions={exportRegions} label="Export PTC Excel" />
+        </section>
+
+        <section className="panel form">
+          <h2>Export PTT Records</h2>
+          <p className="muted">Exports PTT application records from the current active PTT Version.</p>
+          <div className="field">
+            <label>PTT Version</label>
+            <span className="muted">{pttVersionContext.selectedVersionName}</span>
+          </div>
+          <ExportExcelButton group="PTT" versionId={pttVersionContext.selectedVersionParam} regions={exportRegions} label="Export PTT Excel" filename="ptt-applications.xlsx" />
+        </section>
       </section>
     </div>
   );

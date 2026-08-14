@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { clearSession, requireAdmin, requireUser, setSession } from "@/lib/auth";
 import { hashPassword, verifyPassword } from "@/lib/password";
-import { parseGroundsWorkbook, parsePtcRecordsWorkbook } from "@/lib/excel";
+import { parseGroundsWorkbook, parsePtcRecordsWorkbook, parsePttRecordsWorkbook } from "@/lib/excel";
 import { PERMIT_GROUP_PTC } from "@/lib/ptc";
 import { PERMIT_GROUP_PTT } from "@/lib/ptt";
 import { prisma } from "@/lib/prisma";
@@ -1673,6 +1673,76 @@ export async function importPtcRecordsAction(formData: FormData) {
     `/admin/master-data?version=${selectedVersionId || UNCATEGORIZED_VERSION}`,
     "success",
     `Imported ${parsed.length} PTC record${parsed.length === 1 ? "" : "s"}. Assigned: ${assignedCount}. Unmatched types: ${unmatchedTypeCount}. Uncategorized: ${uncategorizedCount}.`
+  );
+}
+
+export async function importPttRecordsAction(formData: FormData) {
+  const user = await requireAdmin();
+  const file = formData.get("file");
+  const selectedVersionId = nullableVersionId(formData.get("versionId"));
+  if (!(file instanceof File)) redirectWithToast("/admin/master-data", "error", "Upload a PTT Excel file.");
+  if (!selectedVersionId) redirectWithToast("/admin/master-data", "error", "Choose a PTT Version before importing PTT records.");
+
+  const selectedVersion = await prisma.ptcVersion.findFirst({
+    where: { id: selectedVersionId, group: PERMIT_GROUP_PTT, active: true }
+  });
+  if (!selectedVersion) redirectWithToast("/admin/master-data", "error", "Selected PTT Version was not found or is archived.");
+
+  let parsed;
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    parsed = parsePttRecordsWorkbook(buffer);
+  } catch {
+    redirectWithToast("/admin/master-data", "error", "Could not read the PTT Excel file.");
+  }
+
+  if (parsed.length === 0) redirectWithToast("/admin/master-data", "error", "No PTT rows were found to import.");
+
+  const data = parsed.map((record) => ({
+    group: PERMIT_GROUP_PTT,
+    versionId: selectedVersionId,
+    createdById: user.id,
+    regionalOffice: record.regionalOffice || null,
+    provincialOffice: record.provincialOffice || null,
+    pttNumber: record.pttNumber || null,
+    dateIssued: record.dateIssued || null,
+    transporterName: record.transporterName || null,
+    transporterAddress: record.transporterAddress || null,
+    ptcNumber: record.ptcNumber || null,
+    pcaRegistrationCertificateNumber: record.pcaRegistrationCertificateNumber || null,
+    pcaRegistrationCertificateDate: record.pcaRegistrationCertificateDate || null,
+    businessAddress: record.businessAddress || null,
+    boardFeetGranted: record.boardFeetGranted ?? null,
+    certificateOfQuantityVolumeAttached: record.certificateOfQuantityVolumeAttached ?? null,
+    volumeBoardFeet: record.volumeBoardFeet ?? null,
+    originOfLumber: record.originOfLumber || null,
+    destination: record.destination || null,
+    consigneeName: record.consigneeName || null,
+    consigneePcaRegistration: record.consigneePcaRegistration || null,
+    transportType: record.transportType || null,
+    vehiclePlateNumber: record.vehiclePlateNumber || null,
+    authorizedDriverName: record.authorizedDriverName || null,
+    authorizedDriverContact: record.authorizedDriverContact || null,
+    amountPaid: record.amountPaid ?? null,
+    officialReceiptNumber: record.officialReceiptNumber || null,
+    validUntil: record.validUntil || null,
+    dateValidatedInspected: record.dateValidatedInspected || null,
+    validatedInspectedBy: record.validatedInspectedBy || null,
+    issuedBy: record.issuedBy || null,
+    remarks: record.remarks || null
+  }));
+
+  try {
+    await prisma.pttApplicationRecord.createMany({ data });
+  } catch {
+    redirectWithToast("/admin/master-data", "error", "Could not import the PTT records.");
+  }
+
+  revalidatePttApplications();
+  redirectWithToast(
+    "/admin/master-data",
+    "success",
+    "Imported " + parsed.length + " PTT record" + (parsed.length === 1 ? "" : "s") + " into " + selectedVersion.name + ". Duplicate PTT Numbers are allowed and will be flagged in the PTT table."
   );
 }
 

@@ -90,6 +90,15 @@ export function pttVersionQueryValue(versionId: string | null) {
   return versionId || UNCATEGORIZED_VERSION;
 }
 
+export function pttRegionName(record: Pick<PttDisplayRecord, "regionalOffice">) {
+  return String(record.regionalOffice || "").trim() || "No Region";
+}
+
+export function filterPttRecordsByRegion<T extends Pick<PttDisplayRecord, "regionalOffice">>(records: T[], region: string) {
+  if (!region || region === "All") return records;
+  return records.filter((record) => pttRegionName(record) === region);
+}
+
 export function displayPttName(record: Pick<PttDisplayRecord, "transporterName">) {
   return String(record.transporterName || "").trim() || "Blank PTT Application";
 }

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { buildPttApplicationsWorkbook, buildReportWorkbook } from "@/lib/excel";
 import { getPttApplicationRecords, getReportData, getVersionContext } from "@/lib/data";
+import { filterDashboardAuditsByRegion } from "@/lib/dashboard";
 import { requireUser } from "@/lib/auth";
-import { PERMIT_GROUP_PTT } from "@/lib/ptt";
+import { filterPttRecordsByRegion, PERMIT_GROUP_PTT } from "@/lib/ptt";
 
 export const runtime = "nodejs";
 
