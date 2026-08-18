@@ -8,25 +8,27 @@ describe("standalone PTC fee calculator", () => {
   });
 
   it("does not charge replanting when seedlings were replanted", () => {
-    const result = calculatePtcFees({ trees: 20, replantedSeedlings: true, damagedByNaturalCalamity: false, powerLineCorridor: false });
+    const result = calculatePtcFees({ trees: 20, replantedSeedlings: true, replacementFeeRate: 50, damagedByNaturalCalamity: false, powerLineCorridor: false });
     expect(result).toMatchObject({ processingFee: 200, applicationFee: 2000, replantingFee: 0, total: 2200 });
   });
 
-  it("charges replanting when seedlings were not replanted", () => {
-    const result = calculatePtcFees({ trees: 20, replantedSeedlings: false, damagedByNaturalCalamity: false, powerLineCorridor: false });
-    expect(result).toMatchObject({ replantingFee: 2000, total: 4200 });
+  it("uses the selected replacement fee when seedlings were not replanted", () => {
+    const atFiftyPesos = calculatePtcFees({ trees: 20, replantedSeedlings: false, replacementFeeRate: 50, damagedByNaturalCalamity: false, powerLineCorridor: false });
+    const atOneHundredPesos = calculatePtcFees({ trees: 20, replantedSeedlings: false, replacementFeeRate: 100, damagedByNaturalCalamity: false, powerLineCorridor: false });
+    expect(atFiftyPesos).toMatchObject({ replantingFee: 1000, total: 3200 });
+    expect(atOneHundredPesos).toMatchObject({ replantingFee: 2000, total: 4200 });
   });
 
   it("uses validity brackets and warns when the PTC limit is exceeded", () => {
     expect([1, 20, 21, 50, 51, 100].map(validityDaysForTrees)).toEqual([3, 3, 10, 10, 15, 15]);
-    expect(calculatePtcFees({ trees: 101, replantedSeedlings: false, damagedByNaturalCalamity: false, powerLineCorridor: false }))
+    expect(calculatePtcFees({ trees: 101, replantedSeedlings: false, replacementFeeRate: 50, damagedByNaturalCalamity: false, powerLineCorridor: false }))
       .toMatchObject({ ptcCount: 2, validityDays: 15, exceedsSinglePtcLimit: true });
   });
 
   it("honors the PTC fee exemptions", () => {
-    expect(calculatePtcFees({ trees: 10, replantedSeedlings: false, damagedByNaturalCalamity: true, powerLineCorridor: false }))
+    expect(calculatePtcFees({ trees: 10, replantedSeedlings: false, replacementFeeRate: 50, damagedByNaturalCalamity: true, powerLineCorridor: false }))
       .toMatchObject({ exempt: true, total: 0 });
-    expect(calculatePtcFees({ trees: 11, replantedSeedlings: false, damagedByNaturalCalamity: true, powerLineCorridor: false }))
+    expect(calculatePtcFees({ trees: 11, replantedSeedlings: false, replacementFeeRate: 50, damagedByNaturalCalamity: true, powerLineCorridor: false }))
       .toMatchObject({ exempt: false });
   });
 });

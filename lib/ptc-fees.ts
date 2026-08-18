@@ -1,8 +1,11 @@
-export const DEFAULT_REPLANTING_RATE = 100;
+export const DEFAULT_REPLACEMENT_FEE_RATE = 50;
+
+export type ReplacementFeeRate = 50 | 100;
 
 export type PtcFeeInput = {
   trees: number;
   replantedSeedlings: boolean;
+  replacementFeeRate: ReplacementFeeRate;
   damagedByNaturalCalamity: boolean;
   powerLineCorridor: boolean;
 };
@@ -72,7 +75,7 @@ export function calculatePtcFees(input: PtcFeeInput): PtcFeeResult {
 
   const processing = processingFee(trees);
   const application = trees * 100;
-  const replanting = input.replantedSeedlings ? 0 : trees * DEFAULT_REPLANTING_RATE;
+  const replanting = input.replantedSeedlings ? 0 : trees * input.replacementFeeRate;
 
   return {
     exempt: false,

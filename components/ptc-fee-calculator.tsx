@@ -1,17 +1,41 @@
 "use client";
 
-import { useState } from "react";
-import { calculatePtcFees, type PtcFeeResult } from "@/lib/ptc-fees";
+import { useEffect, useState } from "react";
+import { calculatePtcFees, DEFAULT_REPLACEMENT_FEE_RATE, type PtcFeeResult, type ReplacementFeeRate } from "@/lib/ptc-fees";
 
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
+const REPLACEMENT_FEE_STORAGE_KEY = "ra8048-calculator-replacement-fee";
 
 export function PtcFeeCalculator() {
   const [trees, setTrees] = useState("");
   const [replantedSeedlings, setReplantedSeedlings] = useState<"" | "yes" | "no">("");
+  const [replacementFeeRate, setReplacementFeeRate] = useState<ReplacementFeeRate>(DEFAULT_REPLACEMENT_FEE_RATE);
   const [damagedByNaturalCalamity, setDamagedByNaturalCalamity] = useState(false);
   const [powerLineCorridor, setPowerLineCorridor] = useState(false);
   const [result, setResult] = useState<PtcFeeResult | null>(null);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    try {
+      const savedRate = window.localStorage.getItem(REPLACEMENT_FEE_STORAGE_KEY);
+      if (savedRate === "50" || savedRate === "100") {
+        setReplacementFeeRate(Number(savedRate) as ReplacementFeeRate);
+      }
+    } catch {
+      // The calculator remains usable when browser storage is unavailable.
+    }
+  }, []);
+
+  function setSavedReplacementFeeRate(value: string) {
+    const nextRate = Number(value) as ReplacementFeeRate;
+    setReplacementFeeRate(nextRate);
+    setResult(null);
+    try {
+      window.localStorage.setItem(REPLACEMENT_FEE_STORAGE_KEY, String(nextRate));
+    } catch {
+      // The in-memory choice still applies to the current calculation.
+    }
+  }
 
   function calculate() {
     const approvedTrees = Number(trees);
@@ -30,6 +54,7 @@ export function PtcFeeCalculator() {
     setResult(calculatePtcFees({
       trees: approvedTrees,
       replantedSeedlings: replantedSeedlings === "yes",
+      replacementFeeRate,
       damagedByNaturalCalamity,
       powerLineCorridor
     }));
@@ -45,7 +70,7 @@ export function PtcFeeCalculator() {
   }
 
   return <section className="panel form calculator-panel">
-    <div className="grid cols-2">
+    <div className="grid cols-3">
       <div className="field">
         <label htmlFor="approved-trees">Number of Trees Approved</label>
         <input id="approved-trees" type="number" min="1" step="1" value={trees} onChange={(event) => { setTrees(event.target.value); setResult(null); }} />
@@ -58,12 +83,19 @@ export function PtcFeeCalculator() {
           <option value="no">No</option>
         </select>
       </div>
+      <div className="field">
+        <label htmlFor="replacement-fee">Replacement Fee</label>
+        <select id="replacement-fee" value={replacementFeeRate} onChange={(event) => setSavedReplacementFeeRate(event.target.value)}>
+          <option value="50">PHP 50 per tree</option>
+          <option value="100">PHP 100 per tree</option>
+        </select>
+      </div>
     </div>
     <div className="checklist" aria-label="PTC fee conditions">
       <label className="check"><input type="checkbox" checked={damagedByNaturalCalamity} onChange={(event) => { setDamagedByNaturalCalamity(event.target.checked); setResult(null); }} />Damaged by natural calamity</label>
       <label className="check"><input type="checkbox" checked={powerLineCorridor} onChange={(event) => { setPowerLineCorridor(event.target.checked); setResult(null); }} />Power Line Corridor</label>
     </div>
-    <p className="muted">Replanting Fee is PHP 100 per approved tree when Replanted Seedlings is set to No. It is not charged when set to Yes.</p>
+    <p className="muted">The replacement fee is PHP {replacementFeeRate} per approved tree when Replanted Seedlings is set to No. It is not charged when set to Yes. This choice is remembered in this browser.</p>
     <div className="actions">
       <button className="button" type="button" onClick={calculate}>Calculate</button>
       <button className="button secondary" type="button" onClick={clear}>Clear</button>
