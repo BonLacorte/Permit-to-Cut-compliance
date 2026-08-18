@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 const ptcNav = [
   ["Dashboard", "/dashboard"],
   ["Applications", "/applications"],
+  ["RA 8048 Fees Calculator", "/ptc/fees-calculator"],
   ["Missing Documents", "/reports/missing-documents"],
   ["Document Summary", "/reports/document-summary"],
   ["Application Summary", "/reports/application-summary"],
