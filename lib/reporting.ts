@@ -42,6 +42,7 @@ export type RecordRef = {
   officialReceiptNumber?: string | null;
   replantedSeedlings?: boolean | null;
   locExemption?: LocExemptionValue;
+  agriculturist?: string | null;
   recommendingApproval?: string | null;
   approved?: string | null;
   ptcNumberDuplicate?: boolean;
@@ -262,9 +263,13 @@ export function applicationExportRows(audits: RecordAudit[]) {
     "Actual Fee": formatFee(audit.actualFee),
     "Recorded Fee": formatFee(audit.recordedFee),
     "Official Receipt No.": audit.officialReceiptNumber || "",
+    "Trees Applied": audit.treesApplied ?? "",
+    "Trees Approved": audit.treesApproved ?? "",
+    "Seedlings Replacement": audit.seedlingsReplacement ?? "",
     "Fee Difference": formatSignedFeeDifference(audit),
     "Fees Match": feesMatchDisplay(audit),
     "Replanted Seedlings": displayReplantedSeedlings(audit.replantedSeedlings),
+    Agriculturist: audit.agriculturist || "",
     "Recommending Approval": audit.recommendingApproval || "",
     Approved: audit.approved || "",
     Status: audit.status,

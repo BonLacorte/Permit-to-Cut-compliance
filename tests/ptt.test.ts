@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
-import { buildPttImportTemplateWorkbook, parsePttRecordsWorkbook, PTT_IMPORT_COLUMNS } from "@/lib/excel";
-import { filterPttRecordsByRegion, hasPttSourceReference, missingPttCompletionFields, pttExportRows, pttStatus } from "@/lib/ptt";
+import { buildPttApplicationsWorkbook, buildPttImportTemplateWorkbook, parsePttRecordsWorkbook, PTT_IMPORT_COLUMNS } from "@/lib/excel";
+import { filterPttRecordsByProvincialOffice, filterPttRecordsByRegion, hasPttSourceReference, missingPttCompletionFields, pttDocumentSummaryRows, pttExportRows, pttStatus } from "@/lib/ptt";
 
 const completeRecord = {
   versionId: "ptt-version-default",
@@ -104,6 +104,49 @@ describe("PTT helpers", () => {
     expect(filterPttRecordsByRegion(records, "No Region").map((record) => record.pttNumber)).toEqual(["888"]);
   });
 
+
+  it("filters PTT records by Provincial Office for export", () => {
+    const records = [
+      completeRecord,
+      { ...completeRecord, pttNumber: "999", regionalOffice: "Region VIII", provincialOffice: "Leyte" },
+      { ...completeRecord, pttNumber: "777", regionalOffice: "Region XIII", provincialOffice: "Agusan del Norte" },
+      { ...completeRecord, pttNumber: "888", regionalOffice: null, provincialOffice: null }
+    ];
+
+    expect(filterPttRecordsByProvincialOffice(records, "All")).toHaveLength(4);
+    expect(filterPttRecordsByProvincialOffice(records, "Quezon I").map((record) => record.pttNumber)).toEqual(["142224"]);
+    expect(filterPttRecordsByProvincialOffice(records, "Agusan del Norte").map((record) => record.pttNumber)).toEqual(["777"]);
+    expect(filterPttRecordsByProvincialOffice(records, "No Provincial Office").map((record) => record.pttNumber)).toEqual(["888"]);
+  });
+
+  it("builds a PTT Document Summary sheet from Certificate of Quantity/Volume Attached", () => {
+    const records = [
+      { ...completeRecord, certificateOfQuantityVolumeAttached: true },
+      { ...completeRecord, pttNumber: "999", certificateOfQuantityVolumeAttached: false },
+      { ...completeRecord, pttNumber: "888", certificateOfQuantityVolumeAttached: null }
+    ];
+
+    expect(pttDocumentSummaryRows(records)).toEqual([{
+      Document: "Certificate of Quantity/Volume Attached",
+      "Total Records": 3,
+      "Submitted/Attached": 1,
+      "Missing/Not Attached": 1,
+      Blank: 1,
+      "Submitted Rate": 1 / 3,
+      "Missing Rate": 1 / 3
+    }]);
+
+    const workbook = XLSX.read(buildPttApplicationsWorkbook(records), { type: "buffer" });
+    expect(workbook.SheetNames).toEqual(["PTT Applications", "Document Summary"]);
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets["Document Summary"]);
+    expect(rows[0]).toMatchObject({
+      Document: "Certificate of Quantity/Volume Attached",
+      "Total Records": 3,
+      "Submitted/Attached": 1,
+      "Missing/Not Attached": 1,
+      Blank: 1
+    });
+  });
   it("parses PTT import workbooks with dates, decimals, booleans, blanks, and text fields", () => {
     const workbook = XLSX.utils.book_new();
     const sheet = XLSX.utils.aoa_to_sheet([

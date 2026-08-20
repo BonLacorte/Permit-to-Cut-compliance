@@ -1029,3 +1029,56 @@ tbody tr:hover {
   color: var(--danger);
   font-weight: 700;
 }
+
+.sidebar {
+  position: relative;
+}
+
+.sidebar-toggle {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.12);
+  border: 0;
+  border-radius: 6px;
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  padding: 0;
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  width: 30px;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.sidebar-collapsed {
+  grid-template-columns: 48px minmax(0, 1fr);
+}
+
+.sidebar-collapsed .sidebar {
+  min-height: 100vh;
+  padding: 0;
+}
+
+.sidebar-collapsed .sidebar-toggle {
+  left: 9px;
+  right: auto;
+}
+
+.full-width-field {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar-collapsed .sidebar {
+    min-height: 48px;
+  }
+}

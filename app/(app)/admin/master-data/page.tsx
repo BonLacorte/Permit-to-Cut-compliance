@@ -78,7 +78,6 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
     deactivated.requiredDocuments.length +
     deactivated.regionalOffices.length +
     deactivated.provincialOffices.length;
-  const exportRegions = Array.from(new Set([...officeChoices.map((office) => office.name), "No Region"]));
 
   return (
     <div className="grid">
@@ -573,18 +572,18 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
       <section className="grid cols-2">
         <section className="panel form">
           <h2>Export PTC Records</h2>
-          <p className="muted">Exports the selected PTC Version. Region filtering applies to all workbook sheets.</p>
-          <ExportExcelButton versionId={versionContext.selectedVersionParam} regions={exportRegions} label="Export PTC Excel" />
+          <p className="muted">Exports the selected PTC Version. Region and Provincial Office filtering apply to all workbook sheets.</p>
+          <ExportExcelButton versionId={versionContext.selectedVersionParam} officeChoices={officeChoices} label="Export PTC Excel" />
         </section>
 
         <section className="panel form">
           <h2>Export PTT Records</h2>
-          <p className="muted">Exports PTT application records from the current active PTT Version.</p>
+          <p className="muted">Exports PTT application records from the current active PTT Version. Region and Provincial Office filtering apply to all workbook sheets.</p>
           <div className="field">
             <label>PTT Version</label>
             <span className="muted">{pttVersionContext.selectedVersionName}</span>
           </div>
-          <ExportExcelButton group="PTT" versionId={pttVersionContext.selectedVersionParam} regions={exportRegions} label="Export PTT Excel" filename="ptt-applications.xlsx" />
+          <ExportExcelButton group="PTT" versionId={pttVersionContext.selectedVersionParam} officeChoices={officeChoices} label="Export PTT Excel" filename="ptt-applications.xlsx" />
         </section>
       </section>
     </div>

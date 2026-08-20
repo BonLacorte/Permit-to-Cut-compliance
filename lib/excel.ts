@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import { applicationSummary, completionSummary, documentCombinations, documentSummary, applicationExportRows, type RecordAudit, type RequiredDocumentRef } from "@/lib/reporting";
-import { pttExportRows, type PttDisplayRecord } from "@/lib/ptt";
+import { pttDocumentSummaryRows, pttExportRows, type PttDisplayRecord } from "@/lib/ptt";
 
 export type ParsedPtcRecord = {
   regionalOffice?: string;
@@ -246,6 +246,7 @@ export function buildReportWorkbook(audits: RecordAudit[], requiredDocuments: Re
 export function buildPttApplicationsWorkbook(records: PttDisplayRecord[]) {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(pttExportRows(records)), "PTT Applications");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(pttDocumentSummaryRows(records)), "Document Summary");
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
 }
 

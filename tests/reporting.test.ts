@@ -337,13 +337,21 @@ describe("reporting logic", () => {
       selectedDocumentIds: ["a1", "a2"],
       recordedValidityDays: 10,
       actualValidityDays: null,
-      officialReceiptNumber: "OR-123"
+      officialReceiptNumber: "OR-123",
+      treesApplied: 25,
+      treesApproved: 20,
+      seedlingsReplacement: 10,
+      agriculturist: "A. Agriculturist"
     }, requiredDocuments);
 
     expect(applicationExportRows([auditWithValidity])[0]).toMatchObject({
       "Recorded Validity": "10",
       "Actual Validity": "",
-      "Official Receipt No.": "OR-123"
+      "Official Receipt No.": "OR-123",
+      "Trees Applied": 25,
+      "Trees Approved": 20,
+      "Seedlings Replacement": 10,
+      Agriculturist: "A. Agriculturist"
     });
   });
   it("treats blank fees as zero when comparing fees", () => {

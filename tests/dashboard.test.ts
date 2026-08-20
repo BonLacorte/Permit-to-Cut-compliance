@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDashboardData, dashboardRegionOptions, filterDashboardAuditsByRegion, topApplicationSummary, topApplicationSummaryByRegion, topMissingDocumentsByRegion } from "@/lib/dashboard";
+import { buildDashboardData, dashboardRegionOptions, filterDashboardAuditsByProvincialOffice, filterDashboardAuditsByRegion, topApplicationSummary, topApplicationSummaryByRegion, topMissingDocumentsByRegion } from "@/lib/dashboard";
 import { auditRecord, type RecordRef, type RequiredDocumentRef } from "@/lib/reporting";
 
 const versionId = "version-2023-2024";
@@ -19,6 +19,7 @@ const records: RecordRef[] = [
     applicationTypeId: "type-a",
     applicationTypeName: "Type A",
     regionalOffice: "Region IV-A",
+    provincialOffice: "Quezon I",
     selectedDocumentIds: ["doc-a", "doc-b"],
     actualFee: "100",
     recordedFee: "100",
@@ -33,6 +34,7 @@ const records: RecordRef[] = [
     applicationTypeId: "type-a",
     applicationTypeName: "Type A",
     regionalOffice: "Region VIII",
+    provincialOffice: "Quezon II",
     selectedDocumentIds: ["doc-a"],
     actualFee: "100",
     recordedFee: "75",
@@ -47,6 +49,7 @@ const records: RecordRef[] = [
     applicationTypeId: "type-b",
     applicationTypeName: "Type B",
     regionalOffice: "Region VIII",
+    provincialOffice: "Quezon II",
     selectedDocumentIds: [],
     actualFee: null,
     recordedFee: "",
@@ -61,6 +64,7 @@ const records: RecordRef[] = [
     applicationTypeId: null,
     applicationTypeName: "Pending",
     regionalOffice: null,
+    provincialOffice: null,
     selectedDocumentIds: [],
     actualFee: "25",
     recordedFee: "0",
@@ -170,6 +174,28 @@ describe("dashboard metrics", () => {
 
     expect(filterDashboardAuditsByRegion(exportAudits, "All").map((audit) => audit.id)).toEqual(["r1", "r2", "r3", "r4", "r5"]);
     expect(filterDashboardAuditsByRegion(exportAudits, "Region XIII").map((audit) => audit.regionalOffice)).toEqual(["Region XIII"]);
+  });
+
+  it("filters PTC export audits by selected Provincial Office while All remains unfiltered", () => {
+    const exportAudits = [
+      ...audits,
+      auditRecord({
+        id: "r5",
+        versionId,
+        versionName: "Old Forms",
+        applicantName: "Applicant 5",
+        applicationTypeId: "type-a",
+        applicationTypeName: "Type A",
+        regionalOffice: "Region XIII",
+        provincialOffice: "Agusan del Norte",
+        selectedDocumentIds: ["doc-a", "doc-b"]
+      }, requiredDocuments)
+    ];
+
+    expect(filterDashboardAuditsByProvincialOffice(exportAudits, "All").map((audit) => audit.id)).toEqual(["r1", "r2", "r3", "r4", "r5"]);
+    expect(filterDashboardAuditsByProvincialOffice(exportAudits, "Quezon I").map((audit) => audit.id)).toEqual(["r1"]);
+    expect(filterDashboardAuditsByProvincialOffice(exportAudits, "Agusan del Norte").map((audit) => audit.id)).toEqual(["r5"]);
+    expect(filterDashboardAuditsByProvincialOffice(exportAudits, "No Provincial Office").map((audit) => audit.id)).toEqual(["r4"]);
   });
   it("filters top missing documents by selected region", () => {
     const rows = topMissingDocumentsByRegion(audits, requiredDocuments);

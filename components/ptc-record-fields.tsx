@@ -22,6 +22,7 @@ type PtcRecordFieldsProps = {
     officialReceiptNumber?: string | null;
     replantedSeedlings?: boolean | null;
     locExemption?: "Owner" | "Others" | null;
+    agriculturist?: string | null;
     recommendingApproval?: string | null;
     approved?: string | null;
   };
@@ -136,6 +137,10 @@ export function PtcRecordFields({ defaults, officeChoices }: PtcRecordFieldsProp
         <div className="field">
           <label htmlFor="approved">Approved</label>
           <input id="approved" name="approved" defaultValue={defaults?.approved || ""} />
+        </div>
+        <div className="field full-width-field">
+          <label htmlFor="agriculturist">Agriculturist</label>
+          <input id="agriculturist" name="agriculturist" defaultValue={defaults?.agriculturist || ""} />
         </div>
       </div>
     </section>

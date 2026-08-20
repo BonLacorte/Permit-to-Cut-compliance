@@ -1,0 +1,1 @@
+ALTER TABLE "application_records" ADD COLUMN "agriculturist" TEXT;

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { logoutAction } from "@/app/actions";
+import { AppShell } from "@/components/app-shell";
 import { ChangePasswordButton } from "@/components/change-password-button";
 import { SubmitButton } from "@/components/submit-button";
 import { requireUser } from "@/lib/auth";
@@ -23,8 +24,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = await requireUser();
 
   return (
-    <div className="shell">
-      <aside className="sidebar">
+    <AppShell sidebar={
+      <>
         <div className="sidebar-user">
           <strong>{user.name}</strong>
           <span>{user.role.toLowerCase()}</span>
@@ -52,8 +53,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <SubmitButton className="nav-submit" pendingText="Signing out...">Sign out</SubmitButton>
           </form>
         </nav>
-      </aside>
-      <main className="main">{children}</main>
-    </div>
+      </>
+    }>
+      {children}
+    </AppShell>
   );
 }

@@ -59,12 +59,14 @@ type Row = {
   locExemptionDisplay: string;
   feesMatchDisplay: string;
   replantedSeedlingsDisplay: string;
+  officialReceiptNumber: string;
+  agriculturist: string;
   recommendingApproval: string;
   approved: string;
   ptcNumberDuplicate: boolean;
 };
 
-type SortKey = "versionName" | "applicantName" | "applicationTypeName" | "submittedCount" | "missingCount" | "status" | "editedByName" | "remarks" | "dateIssued" | "ptcNumber" | "regionalOffice" | "provincialOffice" | "municipality" | "barangay" | "recordedValidityDays" | "actualValidityDays" | "actualFeeAmount" | "recordedFeeAmount" | "feeDifferenceAmount" | "locExemptionDisplay" | "recommendingApproval" | "approved";
+type SortKey = "versionName" | "applicantName" | "applicationTypeName" | "submittedCount" | "missingCount" | "status" | "editedByName" | "remarks" | "dateIssued" | "ptcNumber" | "regionalOffice" | "provincialOffice" | "municipality" | "barangay" | "treesApplied" | "treesApproved" | "seedlingsReplacement" | "recordedValidityDays" | "actualValidityDays" | "actualFeeAmount" | "recordedFeeAmount" | "officialReceiptNumber" | "feeDifferenceAmount" | "locExemptionDisplay" | "agriculturist" | "recommendingApproval" | "approved";
 
 function compareRows(a: Row, b: Row, key: SortKey) {
   const left = a[key];
@@ -79,6 +81,10 @@ function displayName(name: string) {
 
 function displayText(value: string) {
   return value || <span className="muted">Blank</span>;
+}
+
+function displayNumber(value: number | null) {
+  return value === null ? <span className="muted">Blank</span> : value;
 }
 
 function previewLabel(row: Row) {
@@ -136,6 +142,11 @@ export function ApplicationsTable({
             row.provincialOfficeDisplay,
             row.municipalityDisplay,
             row.barangayDisplay,
+            String(row.treesApplied ?? ""),
+            String(row.treesApproved ?? ""),
+            String(row.seedlingsReplacement ?? ""),
+            row.officialReceiptNumber,
+            row.agriculturist,
             row.recordedValidityDisplay,
             row.actualValidityDisplay,
             row.feesMatchDisplay,
@@ -162,7 +173,7 @@ export function ApplicationsTable({
   const selectedRows = useMemo(() => rows.filter((row) => selectedIds.has(row.id)), [rows, selectedIds]);
   const allVisibleSelected = visible.length > 0 && visible.every((row) => selectedIds.has(row.id));
   const someVisibleSelected = visible.some((row) => selectedIds.has(row.id));
-  const tableColSpan = canBulkDelete ? 27 : 26;
+  const tableColSpan = canBulkDelete ? 32 : 31;
   const activeAssignmentOptions = versionOptions.filter((version) => version.id === "uncategorized" || version.active !== false);
   const bulkPreview = useMemo(() => {
     const targetIsUncategorized = bulkVersionId === "uncategorized";
@@ -269,6 +280,9 @@ export function ApplicationsTable({
               <th><button className="th-button" onClick={() => sortBy("provincialOffice")}>Provincial Office{sortLabel("provincialOffice")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("municipality")}>Municipality{sortLabel("municipality")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("barangay")}>Barangay{sortLabel("barangay")}</button></th>
+              <th><button className="th-button" onClick={() => sortBy("treesApplied")}>Trees Applied{sortLabel("treesApplied")}</button></th>
+              <th><button className="th-button" onClick={() => sortBy("treesApproved")}>Trees Approved{sortLabel("treesApproved")}</button></th>
+              <th><button className="th-button" onClick={() => sortBy("seedlingsReplacement")}>Seedlings Replacement{sortLabel("seedlingsReplacement")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("applicationTypeName")}>Type of application{sortLabel("applicationTypeName")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("locExemptionDisplay")}>LOC Exemption{sortLabel("locExemptionDisplay")}</button></th>
               <th>Submitted Documents</th>
@@ -276,9 +290,11 @@ export function ApplicationsTable({
               <th><button className="th-button" onClick={() => sortBy("missingCount")}>Missing{sortLabel("missingCount")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("actualFeeAmount")}>Actual Fee{sortLabel("actualFeeAmount")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("recordedFeeAmount")}>Recorded Fee{sortLabel("recordedFeeAmount")}</button></th>
+              <th><button className="th-button" onClick={() => sortBy("officialReceiptNumber")}>Official Receipt No.{sortLabel("officialReceiptNumber")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("feeDifferenceAmount")}>Fee Difference{sortLabel("feeDifferenceAmount")}</button></th>
               <th>Fees Match</th>
               <th>Replanted Seedlings</th>
+              <th><button className="th-button" onClick={() => sortBy("agriculturist")}>Agriculturist{sortLabel("agriculturist")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("recommendingApproval")}>Recommending Approval{sortLabel("recommendingApproval")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("approved")}>Approved{sortLabel("approved")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("status")}>Status{sortLabel("status")}</button></th>
@@ -303,6 +319,9 @@ export function ApplicationsTable({
                 <td>{displayText(row.provincialOfficeDisplay)}</td>
                 <td>{displayText(row.municipalityDisplay)}</td>
                 <td>{displayText(row.barangayDisplay)}</td>
+                <td>{displayNumber(row.treesApplied)}</td>
+                <td>{displayNumber(row.treesApproved)}</td>
+                <td>{displayNumber(row.seedlingsReplacement)}</td>
                 <td>{row.applicationTypeName}</td>
                 <td>{displayText(row.locExemptionDisplay)}</td>
                 <td><BulletList items={row.selectedDocuments} empty="No documents selected" /></td>
@@ -310,9 +329,11 @@ export function ApplicationsTable({
                 <td>{row.missingCount}</td>
                 <td>{row.actualFeeDisplay}</td>
                 <td>{row.recordedFeeDisplay}</td>
+                <td>{displayText(row.officialReceiptNumber)}</td>
                 <td>{row.feeDifferenceDisplay}</td>
                 <td>{row.feesMatchDisplay}</td>
                 <td>{row.replantedSeedlingsDisplay || <span className="muted">Blank</span>}</td>
+                <td>{displayText(row.agriculturist)}</td>
                 <td>{displayText(row.recommendingApproval)}</td>
                 <td>{displayText(row.approved)}</td>
                 <td><StatusBadge status={row.status} /></td>

@@ -217,6 +217,7 @@ export async function getReportData(options: VersionScopedOptions = {}) {
     officialReceiptNumber: record.officialReceiptNumber,
     replantedSeedlings: record.replantedSeedlings,
     locExemption: record.locExemption,
+    agriculturist: record.agriculturist,
     recommendingApproval: record.recommendingApproval,
     approved: record.approved,
     ptcNumberDuplicate: !!record.ptcNumber && duplicatePtcNumbers.has(record.ptcNumber)

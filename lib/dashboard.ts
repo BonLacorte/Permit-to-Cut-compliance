@@ -47,9 +47,14 @@ export type DashboardData = {
 
 const ALL_REGIONS = "All";
 const NO_REGION = "No Region";
+const NO_PROVINCIAL_OFFICE = "No Provincial Office";
 
 export function dashboardRegionName(record: Pick<RecordAudit, "regionalOffice">) {
   return String(record.regionalOffice || "").trim() || NO_REGION;
+}
+
+export function dashboardProvincialOfficeName(record: Pick<RecordAudit, "provincialOffice">) {
+  return String(record.provincialOffice || "").trim() || NO_PROVINCIAL_OFFICE;
 }
 
 function metricShare(count: number, total: number) {
@@ -216,6 +221,11 @@ export function dashboardRegionOptions(audits: RecordAudit[]) {
 export function filterDashboardAuditsByRegion(audits: RecordAudit[], region: string) {
   if (!region || region === ALL_REGIONS) return audits;
   return audits.filter((audit) => dashboardRegionName(audit) === region);
+}
+
+export function filterDashboardAuditsByProvincialOffice(audits: RecordAudit[], provincialOffice: string) {
+  if (!provincialOffice || provincialOffice === ALL_REGIONS) return audits;
+  return audits.filter((audit) => dashboardProvincialOfficeName(audit) === provincialOffice);
 }
 
 export function buildDashboardData(audits: RecordAudit[], requiredDocuments: RequiredDocumentRef[]): DashboardData {

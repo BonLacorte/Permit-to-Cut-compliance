@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { buildPttApplicationsWorkbook, buildReportWorkbook } from "@/lib/excel";
 import { getPttApplicationRecords, getReportData, getVersionContext } from "@/lib/data";
-import { filterDashboardAuditsByRegion } from "@/lib/dashboard";
+import { filterDashboardAuditsByProvincialOffice, filterDashboardAuditsByRegion } from "@/lib/dashboard";
 import { requireUser } from "@/lib/auth";
-import { filterPttRecordsByRegion, PERMIT_GROUP_PTT } from "@/lib/ptt";
+import { filterPttRecordsByProvincialOffice, filterPttRecordsByRegion, PERMIT_GROUP_PTT } from "@/lib/ptt";
 
 export const runtime = "nodejs";
 
@@ -14,7 +14,8 @@ export async function GET(request: Request) {
   if (group === PERMIT_GROUP_PTT) {
     const versionContext = await getVersionContext(url.searchParams.get("version"), PERMIT_GROUP_PTT);
     const records = await getPttApplicationRecords({ versionId: versionContext.selectedVersionId });
-    const filteredRecords = filterPttRecordsByRegion(records, url.searchParams.get("region") || "All");
+    const regionRecords = filterPttRecordsByRegion(records, url.searchParams.get("region") || "All");
+    const filteredRecords = filterPttRecordsByProvincialOffice(regionRecords, url.searchParams.get("provincialOffice") || "All");
     const buffer = buildPttApplicationsWorkbook(filteredRecords);
 
     return new NextResponse(new Uint8Array(buffer), {
@@ -27,7 +28,8 @@ export async function GET(request: Request) {
 
   const versionContext = await getVersionContext(url.searchParams.get("version"));
   const report = await getReportData({ versionId: versionContext.selectedVersionId });
-  const filteredAudits = filterDashboardAuditsByRegion(report.audits, url.searchParams.get("region") || "All");
+  const regionAudits = filterDashboardAuditsByRegion(report.audits, url.searchParams.get("region") || "All");
+  const filteredAudits = filterDashboardAuditsByProvincialOffice(regionAudits, url.searchParams.get("provincialOffice") || "All");
   const buffer = buildReportWorkbook(filteredAudits, report.requiredDocuments);
 
   return new NextResponse(new Uint8Array(buffer), {

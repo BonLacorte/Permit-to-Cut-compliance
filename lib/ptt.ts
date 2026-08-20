@@ -98,9 +98,18 @@ export function pttRegionName(record: Pick<PttDisplayRecord, "regionalOffice">) 
   return String(record.regionalOffice || "").trim() || "No Region";
 }
 
+export function pttProvincialOfficeName(record: Pick<PttDisplayRecord, "provincialOffice">) {
+  return String(record.provincialOffice || "").trim() || "No Provincial Office";
+}
+
 export function filterPttRecordsByRegion<T extends Pick<PttDisplayRecord, "regionalOffice">>(records: T[], region: string) {
   if (!region || region === "All") return records;
   return records.filter((record) => pttRegionName(record) === region);
+}
+
+export function filterPttRecordsByProvincialOffice<T extends Pick<PttDisplayRecord, "provincialOffice">>(records: T[], provincialOffice: string) {
+  if (!provincialOffice || provincialOffice === "All") return records;
+  return records.filter((record) => pttProvincialOfficeName(record) === provincialOffice);
 }
 
 export function displayPttName(record: Pick<PttDisplayRecord, "transporterName">) {
@@ -149,6 +158,21 @@ export function pttStatus(record: PttDisplayRecord): PttStatus {
   return missingPttCompletionFields(record).length === 0 ? "Complete" : "Incomplete";
 }
 
+export function pttDocumentSummaryRows(records: PttDisplayRecord[]) {
+  const totalRecords = records.length;
+  const submitted = records.filter((record) => record.certificateOfQuantityVolumeAttached === true).length;
+  const missing = records.filter((record) => record.certificateOfQuantityVolumeAttached === false).length;
+  const blank = totalRecords - submitted - missing;
+  return [{
+    Document: "Certificate of Quantity/Volume Attached",
+    "Total Records": totalRecords,
+    "Submitted/Attached": submitted,
+    "Missing/Not Attached": missing,
+    Blank: blank,
+    "Submitted Rate": totalRecords === 0 ? 0 : submitted / totalRecords,
+    "Missing Rate": totalRecords === 0 ? 0 : missing / totalRecords
+  }];
+}
 export function pttExportRows(records: PttDisplayRecord[]) {
   return records.map((record) => ({
     "Date Issued": formatDate(record.dateIssued),

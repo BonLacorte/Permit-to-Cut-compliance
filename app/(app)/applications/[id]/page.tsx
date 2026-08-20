@@ -83,6 +83,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
             officialReceiptNumber: record.officialReceiptNumber || "",
             replantedSeedlings: record.replantedSeedlings,
             locExemption: record.locExemption,
+            agriculturist: record.agriculturist || "",
             recommendingApproval: record.recommendingApproval || "",
             approved: record.approved || ""
           }}
@@ -142,6 +143,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
           <div><span>Official Receipt No.</span><strong>{metadataValue(record.officialReceiptNumber || "")}</strong></div>
           <div><span>Replanted Seedlings</span><strong>{metadataValue(displayReplantedSeedlings(record.replantedSeedlings))}</strong></div>
           <div><span>LOC Exemption</span><strong>{metadataValue(displayLocExemption(record.locExemption))}</strong></div>
+          <div><span>Agriculturist</span><strong>{metadataValue(record.agriculturist || "")}</strong></div>
           <div><span>Recommending Approval</span><strong>{metadataValue(record.recommendingApproval || "")}</strong></div>
           <div><span>Approved</span><strong>{metadataValue(record.approved || "")}</strong></div>
         </div>

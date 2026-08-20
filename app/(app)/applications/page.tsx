@@ -70,8 +70,10 @@ export default async function ApplicationsPage({ searchParams }: { searchParams?
     replantedSeedlings: audit.replantedSeedlings ?? null,
     locExemption: audit.locExemption || null,
     locExemptionDisplay: displayLocExemption(audit.locExemption),
+    officialReceiptNumber: audit.officialReceiptNumber || "",
     feesMatchDisplay: feesMatch(audit) ? "Yes" : "No",
     replantedSeedlingsDisplay: displayReplantedSeedlings(audit.replantedSeedlings),
+    agriculturist: audit.agriculturist || "",
     recommendingApproval: audit.recommendingApproval || "",
     approved: audit.approved || "",
     ptcNumberDuplicate: !!audit.ptcNumberDuplicate

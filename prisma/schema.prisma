@@ -144,6 +144,7 @@ model ApplicationRecord {
   officialReceiptNumber String?
   replantedSeedlings   Boolean?
   locExemption         LocExemption?
+  agriculturist        String?
   recommendingApproval String?
   approved             String?
   createdById          String

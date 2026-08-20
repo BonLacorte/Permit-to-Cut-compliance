@@ -132,6 +132,7 @@ function ptcRecordData(formData: FormData) {
     officialReceiptNumber: nullableString(formData.get("officialReceiptNumber")),
     replantedSeedlings: nullableBoolean(formData.get("replantedSeedlings")),
     locExemption: nullableLocExemption(formData.get("locExemption")),
+    agriculturist: nullableString(formData.get("agriculturist")),
     recommendingApproval: nullableString(formData.get("recommendingApproval")),
     approved: nullableString(formData.get("approved"))
   };
@@ -333,7 +334,8 @@ export async function createRecordAction(formData: FormData) {
   }
 
   revalidateReports();
-  redirectWithToast(`/applications/${recordId}`, "success", "Application created.");
+  const nextApplicationPath = versionId ? `/applications/new?version=${encodeURIComponent(versionId)}` : "/applications/new";
+  redirectWithToast(nextApplicationPath, "success", "Application created. Ready for a new record.");
 }
 export async function appendProgressAction(formData: FormData) {
   const user = await requireUser();

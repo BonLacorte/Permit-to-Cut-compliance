@@ -32,6 +32,7 @@ type RecordDetails = {
   officialReceiptNumber?: string | null;
   replantedSeedlings?: boolean | null;
   locExemption?: "Owner" | "Others" | null;
+  agriculturist?: string | null;
   recommendingApproval?: string | null;
   approved?: string | null;
 };
