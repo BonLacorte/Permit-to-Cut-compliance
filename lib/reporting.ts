@@ -24,6 +24,7 @@ export type RecordRef = {
   applicationTypeName: string;
   selectedDocumentIds: string[];
   remarks?: string;
+  manualRemarks?: string;
   createdByName?: string;
   editedByName?: string;
   ptcNumber?: string | null;
@@ -208,6 +209,25 @@ export function documentSummary(audits: RecordAudit[], requiredDocuments: Requir
   });
 }
 
+
+export function documentCoverage(audits: RecordAudit[], requiredDocuments: RequiredDocumentRef[]) {
+  return requiredDocuments.map((doc) => {
+    const scoped = audits.filter((audit) => audit.applicationTypeId === doc.applicationTypeId);
+    const withDocumentCount = scoped.filter((audit) => audit.selectedDocumentIds.includes(doc.id)).length;
+    const withoutDocumentCount = scoped.length - withDocumentCount;
+    return {
+      applicationTypeId: doc.applicationTypeId,
+      applicationTypeName: doc.applicationTypeName,
+      requiredDocumentId: doc.id,
+      requiredDocumentName: doc.name,
+      requirementMode: requirementMode(doc),
+      totalRecords: scoped.length,
+      withDocumentCount,
+      withoutDocumentCount,
+      coverageRate: scoped.length === 0 ? 0 : withDocumentCount / scoped.length
+    };
+  });
+}
 export function documentCombinations(audits: RecordAudit[]) {
   const counts = new Map<string, { applicationTypeName: string; combination: string; documents: string[]; size: number; count: number; appTotal: number }>();
   const totals = new Map<string, number>();
@@ -277,3 +297,4 @@ export function applicationExportRows(audits: RecordAudit[]) {
     "Edited By": audit.editedByName || ""
   }));
 }
+

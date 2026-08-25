@@ -8,8 +8,19 @@ datasource db {
 }
 
 enum Role {
+  SUPERADMIN
   ADMIN
   STAFF
+}
+
+enum FeatureKey {
+  PTC_FEES_CHECKER
+  PTC_VALIDITY_CHECKER
+}
+
+enum ApplicationCheckType {
+  Fee
+  Validity
 }
 
 enum LocExemption {
@@ -37,8 +48,21 @@ model User {
   editedPttRecords PttApplicationRecord[] @relation("EditedPttRecords")
   progress         ProgressEntry[]
   activity         ActivityLog[]
+  featureAccess    UserFeatureAccess[]
+  checkRuns        ApplicationCheckRun[]
 
   @@map("users")
+}
+
+model UserFeatureAccess {
+  id        String     @id @default(cuid())
+  userId    String
+  feature   FeatureKey
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, feature])
+  @@map("user_feature_access")
 }
 
 model PtcVersion {
@@ -54,6 +78,7 @@ model PtcVersion {
   records           ApplicationRecord[]
   pttRecords        PttApplicationRecord[]
   pttTransportTypes PttTransportType[]
+  calculationRules  PtcCalculationRule[]
 
   @@unique([group, name])
   @@map("ptc_versions")
@@ -71,6 +96,7 @@ model ApplicationType {
   version   PtcVersion          @relation(fields: [versionId], references: [id])
   documents RequiredDocument[]
   records   ApplicationRecord[]
+  calculationRules PtcCalculationRule[]
 
   @@unique([versionId, name])
   @@index([group])
@@ -157,6 +183,8 @@ model ApplicationRecord {
   editedBy             User?              @relation("EditedRecords", fields: [editedById], references: [id])
   progressEntries      ProgressEntry[]
   progressDocuments    ProgressDocument[]
+  checkRuns            ApplicationCheckRun[]
+  checkFindings        ApplicationCheckFinding[]
 
   @@index([applicationTypeId])
   @@index([versionId])
@@ -164,6 +192,63 @@ model ApplicationRecord {
   @@index([ptcNumber])
   @@index([editedById])
   @@map("application_records")
+}
+
+model PtcCalculationRule {
+  id                         String           @id @default(cuid())
+  versionId                  String
+  applicationTypeId          String?
+  processingTiers            Json
+  additionalProcessingStep   Int              @default(50)
+  additionalProcessingFee    Decimal          @default(200) @db.Decimal(12, 2)
+  applicationFeePerTree      Decimal          @default(100) @db.Decimal(12, 2)
+  replantingFeePerTree       Decimal          @default(100) @db.Decimal(12, 2)
+  maxTreesPerPtc             Int              @default(100)
+  validityBrackets           Json
+  createdAt                  DateTime         @default(now())
+  updatedAt                  DateTime         @updatedAt
+  version                    PtcVersion       @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  applicationType            ApplicationType? @relation(fields: [applicationTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, applicationTypeId])
+  @@index([versionId])
+  @@index([applicationTypeId])
+  @@map("ptc_calculation_rules")
+}
+
+model ApplicationCheckRun {
+  id                  String               @id @default(cuid())
+  applicationRecordId String
+  checkType           ApplicationCheckType
+  appliedById         String
+  inputSnapshot       Json
+  ruleSnapshot        Json
+  outputSnapshot      Json
+  comparisonSnapshot  Json
+  createdAt           DateTime             @default(now())
+  applicationRecord   ApplicationRecord    @relation(fields: [applicationRecordId], references: [id], onDelete: Cascade)
+  appliedBy           User                 @relation(fields: [appliedById], references: [id])
+
+  @@index([applicationRecordId, createdAt])
+  @@index([appliedById])
+  @@map("application_check_runs")
+}
+
+model ApplicationCheckFinding {
+  id                  String               @id @default(cuid())
+  applicationRecordId String
+  checkType           ApplicationCheckType
+  message             String
+  active              Boolean              @default(true)
+  comparisonSnapshot  Json
+  resolvedAt          DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  applicationRecord   ApplicationRecord    @relation(fields: [applicationRecordId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationRecordId, checkType])
+  @@index([applicationRecordId, active])
+  @@map("application_check_findings")
 }
 
 model ProgressEntry {

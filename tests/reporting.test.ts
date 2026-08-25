@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { filterDashboardAuditsByProvincialOffice, filterDashboardAuditsByRegion } from "@/lib/dashboard";
 import { feesMatchDisplay, formatSignedFeeDifference } from "@/lib/ptc";
 import {
   auditRecord,
@@ -6,6 +7,7 @@ import {
   completionSummary,
   documentCombinations,
   documentSummary,
+  documentCoverage,
   applicationExportRows,
   type RecordRef,
   type RequiredDocumentRef
@@ -231,6 +233,41 @@ describe("reporting logic", () => {
       missingCount: 1
     });
   });
+
+  it("summarizes factual document coverage separately from required missing counts", () => {
+    const documents: RequiredDocumentRef[] = [
+      ...requiredDocuments,
+      { id: "a3", name: "Optional A3", versionId, applicationTypeId: "appA", applicationTypeName: "Type A", requirementMode: "Optional" }
+    ];
+    const audits = [
+      auditRecord({ id: "r20", versionId, applicantName: "Person T", applicationTypeId: "appA", applicationTypeName: "Type A", selectedDocumentIds: ["a1", "a2"] }, documents),
+      auditRecord({ id: "r21", versionId, applicantName: "Person U", applicationTypeId: "appA", applicationTypeName: "Type A", selectedDocumentIds: ["a1", "a2", "a3"] }, documents)
+    ];
+
+    expect(documentCoverage(audits, documents).find((doc) => doc.requiredDocumentId === "a3")).toMatchObject({
+      totalRecords: 2,
+      withDocumentCount: 1,
+      withoutDocumentCount: 1,
+      coverageRate: 0.5,
+      requirementMode: "Optional"
+    });
+    expect(documentSummary(audits, documents).some((doc) => doc.requiredDocumentId === "a3")).toBe(false);
+  });
+
+  it("supports document coverage after region and provincial office filtering", () => {
+    const audits = [
+      auditRecord({ id: "r22", versionId, applicantName: "Person V", applicationTypeId: "appA", applicationTypeName: "Type A", selectedDocumentIds: ["a1"], regionalOffice: "Region IV-A", provincialOffice: "Quezon I" }, requiredDocuments),
+      auditRecord({ id: "r23", versionId, applicantName: "Person W", applicationTypeId: "appA", applicationTypeName: "Type A", selectedDocumentIds: [], regionalOffice: "Region IV-A", provincialOffice: "Quezon II" }, requiredDocuments),
+      auditRecord({ id: "r24", versionId, applicantName: "Person X", applicationTypeId: "appA", applicationTypeName: "Type A", selectedDocumentIds: ["a1"], regionalOffice: "Region XIII", provincialOffice: "Agusan del Norte" }, requiredDocuments)
+    ];
+
+    const filtered = filterDashboardAuditsByProvincialOffice(filterDashboardAuditsByRegion(audits, "Region IV-A"), "Quezon I");
+    expect(documentCoverage(filtered, requiredDocuments).find((doc) => doc.requiredDocumentId === "a1")).toMatchObject({
+      totalRecords: 1,
+      withDocumentCount: 1,
+      withoutDocumentCount: 0
+    });
+  });
   it("marks a record pending when no Version is assigned", () => {
     const audit = auditRecord({
       id: "r8",
@@ -366,4 +403,5 @@ describe("reporting logic", () => {
     expect(formatSignedFeeDifference({ actualFee: null, recordedFee: "" })).toBe("0");
   });
 });
+
 

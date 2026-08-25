@@ -1,15 +1,17 @@
 "use server";
 
-import { DocumentRequirementMode, LocExemption, Role } from "@prisma/client";
+import { ApplicationCheckType, DocumentRequirementMode, FeatureKey, LocExemption, Prisma, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { clearSession, requireAdmin, requireUser, setSession } from "@/lib/auth";
+import { clearSession, requireAdmin, requireSuperadmin, requireUser, setSession, userHasFeature } from "@/lib/auth";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { parseGroundsWorkbook, parsePtcRecordsWorkbook, parsePttRecordsWorkbook } from "@/lib/excel";
 import { PERMIT_GROUP_PTC } from "@/lib/ptc";
 import { PERMIT_GROUP_PTT } from "@/lib/ptt";
 import { prisma } from "@/lib/prisma";
+import { calculatePtcFee, calculatePtcValidity, feeFinding, normalizePtcCalculationConfig, validityFinding } from "@/lib/ptc-checks";
+import { defaultRuleData, resolvedPtcCalculationRule } from "@/lib/ptc-calculation-rules";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
 
 const createRecordSchema = z.object({
@@ -108,7 +110,7 @@ function nullableDate(value: FormDataEntryValue | null) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function nullableVersionId(value: FormDataEntryValue | null) {
+function nullableVersionId(value: FormDataEntryValue | null): string | null {
   const text = optionalString(value);
   if (!text || text === UNCATEGORIZED_VERSION) return null;
   return text;
@@ -135,6 +137,125 @@ function ptcRecordData(formData: FormData) {
     agriculturist: nullableString(formData.get("agriculturist")),
     recommendingApproval: nullableString(formData.get("recommendingApproval")),
     approved: nullableString(formData.get("approved"))
+  };
+}
+
+type PendingPtcCheck = {
+  checkType: ApplicationCheckType;
+  inputSnapshot: Prisma.InputJsonObject;
+  ruleSnapshot: Prisma.InputJsonObject;
+  outputSnapshot: Prisma.InputJsonObject;
+  comparisonSnapshot: Prisma.InputJsonObject;
+  findingMessage: string | null;
+};
+
+async function buildPtcChecks(formData: FormData, user: { id: string; role: Role }, versionId: string | null, applicationTypeId: string | null) {
+  const applyFee = String(formData.get("applyFeeCheck") || "") === "true";
+  const applyValidity = String(formData.get("applyValidityCheck") || "") === "true";
+  if (!applyFee && !applyValidity) return { checks: [] as PendingPtcCheck[], data: {} };
+  if (!versionId || !applicationTypeId) return { error: "Choose a Version and Type of Application before using a checker." };
+  if (applyFee && !(await userHasFeature(user, FeatureKey.PTC_FEES_CHECKER))) return { error: "You do not have access to the PTC Fees Checker." };
+  if (applyValidity && !(await userHasFeature(user, FeatureKey.PTC_VALIDITY_CHECKER))) return { error: "You do not have access to the PTC Validity Checker." };
+
+  try {
+    const { rule, config, usingApplicationTypeOverride } = await resolvedPtcCalculationRule(versionId, applicationTypeId);
+    const ruleSnapshot = { id: rule.id, versionId, applicationTypeId, usingApplicationTypeOverride, config };
+    const checks: PendingPtcCheck[] = [];
+    const data: { actualFee?: number; actualValidityDays?: number } = {};
+    const treesApproved = nullableInt(formData.get("treesApproved"));
+
+    if (applyFee) {
+      const replantedSeedlings = nullableBoolean(formData.get("replantedSeedlings"));
+      const result = calculatePtcFee({ treesApproved, replantedSeedlings, config });
+      const recordedFee = nullableDecimal(formData.get("recordedFee"));
+      const findingMessage = feeFinding(recordedFee === null ? null : Number(recordedFee), result.actualFee);
+      data.actualFee = result.actualFee;
+      checks.push({
+        checkType: ApplicationCheckType.Fee,
+        inputSnapshot: { treesApproved, replantedSeedlings, recordedFee },
+        ruleSnapshot,
+        outputSnapshot: result,
+        comparisonSnapshot: { recordedFee: recordedFee === null ? null : Number(recordedFee), actualFee: result.actualFee, matches: !findingMessage },
+        findingMessage
+      });
+    }
+
+    if (applyValidity) {
+      const result = calculatePtcValidity({ treesApproved, config });
+      const recordedValidityDays = nullableInt(formData.get("recordedValidityDays"));
+      const findingMessage = validityFinding(recordedValidityDays, result);
+      data.actualValidityDays = result.actualValidityDays;
+      checks.push({
+        checkType: ApplicationCheckType.Validity,
+        inputSnapshot: { treesApproved, recordedValidityDays },
+        ruleSnapshot,
+        outputSnapshot: result,
+        comparisonSnapshot: {
+          recordedValidityDays,
+          actualValidityDays: result.actualValidityDays,
+          matches: recordedValidityDays === result.actualValidityDays,
+          exceedsSinglePtcLimit: result.exceedsSinglePtcLimit
+        },
+        findingMessage
+      });
+    }
+
+    return { checks, data };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not calculate the requested PTC check." };
+  }
+}
+
+async function persistPtcChecks(tx: Prisma.TransactionClient, applicationRecordId: string, userId: string, checks: PendingPtcCheck[]) {
+  for (const check of checks) {
+    await tx.applicationCheckRun.create({
+      data: {
+        applicationRecordId,
+        checkType: check.checkType,
+        appliedById: userId,
+        inputSnapshot: check.inputSnapshot,
+        ruleSnapshot: check.ruleSnapshot,
+        outputSnapshot: check.outputSnapshot,
+        comparisonSnapshot: check.comparisonSnapshot
+      }
+    });
+    await tx.applicationCheckFinding.upsert({
+      where: { applicationRecordId_checkType: { applicationRecordId, checkType: check.checkType } },
+      update: {
+        message: check.findingMessage || "Values match.",
+        active: Boolean(check.findingMessage),
+        comparisonSnapshot: check.comparisonSnapshot,
+        resolvedAt: check.findingMessage ? null : new Date()
+      },
+      create: {
+        applicationRecordId,
+        checkType: check.checkType,
+        message: check.findingMessage || "Values match.",
+        active: Boolean(check.findingMessage),
+        comparisonSnapshot: check.comparisonSnapshot,
+        resolvedAt: check.findingMessage ? null : new Date()
+      }
+    });
+  }
+}
+
+function calculationRuleData(rule: {
+  processingTiers: Prisma.JsonValue;
+  additionalProcessingStep: number;
+  additionalProcessingFee: unknown;
+  applicationFeePerTree: unknown;
+  replantingFeePerTree: unknown;
+  maxTreesPerPtc: number;
+  validityBrackets: Prisma.JsonValue;
+}): Omit<Prisma.PtcCalculationRuleUncheckedCreateInput, "id" | "versionId" | "applicationTypeId" | "createdAt" | "updatedAt"> {
+  return {
+    processingTiers: rule.processingTiers === null ? Prisma.JsonNull : rule.processingTiers as Prisma.InputJsonValue,
+    additionalProcessingStep: rule.additionalProcessingStep,
+    additionalProcessingFee: Number(rule.additionalProcessingFee),
+    applicationFeePerTree: Number(rule.applicationFeePerTree),
+    replantingFeePerTree: Number(rule.replantingFeePerTree),
+    maxTreesPerPtc: rule.maxTreesPerPtc,
+    validityBrackets: rule.validityBrackets === null ? Prisma.JsonNull : rule.validityBrackets as Prisma.InputJsonValue
   };
 }
 
@@ -291,6 +412,8 @@ export async function createRecordAction(formData: FormData) {
     const allowedDocumentIds = new Set(allowedDocuments.map((document) => document.id));
     const invalidDocumentIds = input.documentIds.filter((documentId) => !allowedDocumentIds.has(documentId));
     if (invalidDocumentIds.length > 0) redirectWithToast("/applications/new", "error", "One or more submitted files do not belong to the selected Version.");
+    const checkResult = await buildPtcChecks(formData, user, versionId, applicationTypeId);
+    if ("error" in checkResult) redirectWithToast("/applications/new", "error", checkResult.error || "Could not calculate the requested PTC check.");
 
     const record = await prisma.$transaction(async (tx) => {
       const created = await tx.applicationRecord.create({
@@ -301,6 +424,7 @@ export async function createRecordAction(formData: FormData) {
           applicationTypeId,
           remarks: input.remarks || null,
           ...ptcRecordData(formData),
+          ...checkResult.data,
           createdById: user.id
         }
       });
@@ -322,8 +446,10 @@ export async function createRecordAction(formData: FormData) {
       }
 
       await tx.activityLog.create({
-        data: { userId: user.id, action: "CREATE_RECORD", targetType: "application_record", targetId: created.id, metadata: { versionId } }
+        data: { userId: user.id, action: "CREATE_RECORD", targetType: "application_record", targetId: created.id, metadata: { versionId, appliedChecks: checkResult.checks.map((check) => check.checkType) } }
       });
+
+      await persistPtcChecks(tx, created.id, user.id, checkResult.checks);
 
       return created;
     });
@@ -450,6 +576,8 @@ export async function updateApplicationRecordAction(formData: FormData) {
   if (invalidDocumentIds.length > 0) {
     redirectWithToast(returnTo, "error", "One or more submitted files do not belong to the selected Version.");
   }
+  const checkResult = await buildPtcChecks(formData, user, versionId, applicationTypeId);
+  if ("error" in checkResult) redirectWithToast(returnTo, "error", checkResult.error || "Could not calculate the requested PTC check.");
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -463,6 +591,7 @@ export async function updateApplicationRecordAction(formData: FormData) {
           applicationTypeId,
           remarks: input.remarks || null,
           ...ptcRecordData(formData),
+          ...checkResult.data,
           editedById: user.id
         }
       });
@@ -495,10 +624,13 @@ export async function updateApplicationRecordAction(formData: FormData) {
             versionChanged: current.versionId !== versionId,
             applicationTypeChanged: current.applicationTypeId !== applicationTypeId,
             submittedDocumentCount: allowedDocuments.length,
+            appliedChecks: checkResult.checks.map((check) => check.checkType),
             source: "EDIT_MODAL"
           }
         }
       });
+
+      await persistPtcChecks(tx, input.id, user.id, checkResult.checks);
     });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
@@ -780,7 +912,7 @@ export async function deleteAllApplicationRecordsAction(formData: FormData) {
 }
 
 export async function createUserAction(formData: FormData) {
-  await requireAdmin();
+  await requireSuperadmin();
   const name = String(formData.get("name") || "").trim();
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const password = String(formData.get("password") || "");
@@ -802,13 +934,14 @@ export async function createUserAction(formData: FormData) {
 }
 
 export async function deleteUserAction(formData: FormData) {
-  const admin = await requireAdmin();
+  const admin = await requireSuperadmin();
   const id = String(formData.get("id") || "");
   if (!id) redirectWithToast("/admin/users", "error", "User id is required.");
   if (id === admin.id) redirectWithToast("/admin/users", "error", "You cannot delete your own account.");
 
   const target = await prisma.user.findUnique({ where: { id } });
   if (!target) redirectWithToast("/admin/users", "error", "User was not found.");
+  if (target.role === Role.SUPERADMIN) redirectWithToast("/admin/users", "error", "Superadmin accounts cannot be deleted from this screen.");
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -832,6 +965,127 @@ export async function deleteUserAction(formData: FormData) {
   redirectWithToast("/admin/users", "success", "User deleted.");
 }
 
+
+export async function resetUserPasswordAction(formData: FormData) {
+  const superadmin = await requireSuperadmin();
+  const userId = String(formData.get("userId") || "");
+  const newPassword = String(formData.get("newPassword") || "");
+  const confirmPassword = String(formData.get("confirmPassword") || "");
+  if (!userId) redirectWithToast("/admin/users", "error", "User id is required.");
+  if (newPassword.length < 6) redirectWithToast("/admin/users", "error", "New password must be at least 6 characters.");
+  if (newPassword !== confirmPassword) redirectWithToast("/admin/users", "error", "New passwords do not match.");
+
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target) redirectWithToast("/admin/users", "error", "User was not found.");
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { passwordHash: await hashPassword(newPassword) } });
+    await tx.activityLog.create({
+      data: { userId: superadmin.id, action: "RESET_USER_PASSWORD", targetType: "user", targetId: userId, metadata: { email: target.email } }
+    });
+  });
+
+  revalidatePath("/admin/users");
+  redirectWithToast("/admin/users", "success", `Password reset for ${target.email}.`);
+}
+export async function updateUserFeatureAccessAction(formData: FormData) {
+  const superadmin = await requireSuperadmin();
+  const userId = String(formData.get("userId") || "");
+  if (!userId) redirectWithToast("/admin/users", "error", "User id is required.");
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target) redirectWithToast("/admin/users", "error", "User was not found.");
+  if (target.role !== Role.ADMIN) redirectWithToast("/admin/users", "error", "Feature access can only be assigned to Admin accounts.");
+  const features = [
+    ...(formData.get("ptcFeesChecker") === "on" ? [FeatureKey.PTC_FEES_CHECKER] : []),
+    ...(formData.get("ptcValidityChecker") === "on" ? [FeatureKey.PTC_VALIDITY_CHECKER] : [])
+  ];
+
+  await prisma.$transaction(async (tx) => {
+    await tx.userFeatureAccess.deleteMany({ where: { userId } });
+    if (features.length > 0) await tx.userFeatureAccess.createMany({ data: features.map((feature) => ({ userId, feature })) });
+    await tx.activityLog.create({
+      data: { userId: superadmin.id, action: "UPDATE_FEATURE_ACCESS", targetType: "user", targetId: userId, metadata: { features } }
+    });
+  });
+
+  revalidatePath("/admin/users");
+  redirectWithToast("/admin/users", "success", "Feature access updated.");
+}
+
+function calculationConfigFromFormData(formData: FormData) {
+  const tierUps = formData.getAll("tierUpTo").map((value) => nullableInt(value));
+  const tierFees = formData.getAll("tierFee").map((value) => nullableDecimal(value));
+  const validityUps = formData.getAll("validityUpTo").map((value) => nullableInt(value));
+  const validityDays = formData.getAll("validityDays").map((value) => nullableInt(value));
+  const processingTiers = tierUps.map((upTo, index) => ({ upTo, fee: tierFees[index] === null ? null : Number(tierFees[index]) }));
+  const validityBrackets = validityUps.map((upTo, index) => ({ upTo, days: validityDays[index] }));
+  if (processingTiers.some((tier) => !tier.upTo || tier.fee === null) || validityBrackets.some((bracket) => !bracket.upTo || !bracket.days)) {
+    throw new Error("Complete every processing-fee and validity bracket.");
+  }
+  if (processingTiers.some((tier, index) => index > 0 && tier.upTo! <= processingTiers[index - 1].upTo!) || validityBrackets.some((bracket, index) => index > 0 && bracket.upTo! <= validityBrackets[index - 1].upTo!)) {
+    throw new Error("Bracket limits must increase from top to bottom.");
+  }
+  return normalizePtcCalculationConfig({
+    processingTiers: processingTiers.map((tier) => ({ upTo: tier.upTo!, fee: tier.fee! })),
+    additionalProcessingStep: nullableInt(formData.get("additionalProcessingStep")) ?? 0,
+    additionalProcessingFee: Number(nullableDecimal(formData.get("additionalProcessingFee")) ?? 0),
+    applicationFeePerTree: Number(nullableDecimal(formData.get("applicationFeePerTree")) ?? 0),
+    replantingFeePerTree: Number(nullableDecimal(formData.get("replantingFeePerTree")) ?? 0),
+    maxTreesPerPtc: nullableInt(formData.get("maxTreesPerPtc")) ?? 0,
+    validityBrackets: validityBrackets.map((bracket) => ({ upTo: bracket.upTo!, days: bracket.days! }))
+  });
+}
+
+export async function savePtcCalculationRuleAction(formData: FormData) {
+  const superadmin = await requireSuperadmin();
+  const versionId = String(formData.get("versionId") || "");
+  const applicationTypeId = nullableString(formData.get("applicationTypeId"));
+  if (!versionId) redirectWithToast("/admin/master-data", "error", "Choose a PTC Version before saving calculation rules.");
+  try {
+    const version = await prisma.ptcVersion.findFirst({ where: { id: versionId, group: PERMIT_GROUP_PTC } });
+    if (!version) redirectWithToast("/admin/master-data", "error", "PTC Version was not found.");
+    if (applicationTypeId) {
+      const applicationType = await prisma.applicationType.findFirst({ where: { id: applicationTypeId, versionId, group: PERMIT_GROUP_PTC } });
+      if (!applicationType) redirectWithToast("/admin/master-data", "error", "The selected Type of Application does not belong to this Version.");
+    }
+    const config = calculationConfigFromFormData(formData);
+    const data = { ...config };
+    if (applicationTypeId) {
+      await prisma.ptcCalculationRule.upsert({
+        where: { versionId_applicationTypeId: { versionId, applicationTypeId } },
+        update: data,
+        create: { versionId, applicationTypeId, ...data }
+      });
+    } else {
+      const existing = await prisma.ptcCalculationRule.findFirst({ where: { versionId, applicationTypeId: null } });
+      if (existing) await prisma.ptcCalculationRule.update({ where: { id: existing.id }, data });
+      else await prisma.ptcCalculationRule.create({ data: { versionId, ...data } });
+    }
+    await prisma.activityLog.create({
+      data: { userId: superadmin.id, action: "SAVE_PTC_CALCULATION_RULE", targetType: "ptc_calculation_rule", metadata: { versionId, applicationTypeId: applicationTypeId || null } }
+    });
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    redirectWithToast("/admin/master-data", "error", error instanceof Error ? error.message : "Could not save PTC calculation rules.");
+  }
+
+  revalidatePath("/admin/master-data");
+  redirectWithToast(`/admin/master-data?version=${versionId}`, "success", applicationTypeId ? "Type of Application calculation override saved." : "Version calculation rules saved.");
+}
+
+export async function resetPtcApplicationTypeRuleAction(formData: FormData) {
+  const superadmin = await requireSuperadmin();
+  const versionId = String(formData.get("versionId") || "");
+  const applicationTypeId = String(formData.get("applicationTypeId") || "");
+  if (!versionId || !applicationTypeId) redirectWithToast("/admin/master-data", "error", "Version and Type of Application are required.");
+  await prisma.ptcCalculationRule.deleteMany({ where: { versionId, applicationTypeId } });
+  await prisma.activityLog.create({
+    data: { userId: superadmin.id, action: "RESET_PTC_CALCULATION_RULE_OVERRIDE", targetType: "ptc_calculation_rule", metadata: { versionId, applicationTypeId } }
+  });
+  revalidatePath("/admin/master-data");
+  redirectWithToast(`/admin/master-data?version=${versionId}`, "success", "Type of Application now inherits the Version calculation rules.");
+}
+
 export async function createPtcVersionAction(formData: FormData) {
   await requireAdmin();
   const name = String(formData.get("name") || "").trim();
@@ -840,11 +1094,13 @@ export async function createPtcVersionAction(formData: FormData) {
 
   try {
     const count = await prisma.ptcVersion.count({ where: { group: PERMIT_GROUP_PTC } });
-    await prisma.ptcVersion.upsert({
+    const version = await prisma.ptcVersion.upsert({
       where: { group_name: { group: PERMIT_GROUP_PTC, name } },
       update: { active: true, description },
       create: { group: PERMIT_GROUP_PTC, name, description, sortOrder: count + 1 }
     });
+    const existingRule = await prisma.ptcCalculationRule.findFirst({ where: { versionId: version.id, applicationTypeId: null } });
+    if (!existingRule) await prisma.ptcCalculationRule.create({ data: { versionId: version.id, ...defaultRuleData() } });
   } catch {
     redirectWithToast("/admin/master-data", "error", "Could not create the Version. The name may already exist.");
   }
@@ -865,6 +1121,7 @@ export async function clonePtcVersionAction(formData: FormData) {
     const source = await prisma.ptcVersion.findFirst({
       where: { id: sourceVersionId, group: PERMIT_GROUP_PTC },
       include: {
+        calculationRules: true,
         applicationTypes: {
           where: { active: true },
           include: { documents: { where: { active: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] } },
@@ -881,6 +1138,12 @@ export async function clonePtcVersionAction(formData: FormData) {
       data: { group: PERMIT_GROUP_PTC, name, description, active: true, sortOrder: count + 1 }
     });
     createdVersionId = created.id;
+    const sourceDefaultRule = source.calculationRules.find((rule) => rule.applicationTypeId === null);
+    await prisma.ptcCalculationRule.create({
+      data: sourceDefaultRule
+        ? { versionId: created.id, ...calculationRuleData(sourceDefaultRule) }
+        : { versionId: created.id, ...defaultRuleData() }
+    });
 
     for (const type of source.applicationTypes) {
       const clonedType = await prisma.applicationType.create({
@@ -892,6 +1155,13 @@ export async function clonePtcVersionAction(formData: FormData) {
           sortOrder: type.sortOrder
         }
       });
+
+      const sourceOverride = source.calculationRules.find((rule) => rule.applicationTypeId === type.id);
+      if (sourceOverride) {
+        await prisma.ptcCalculationRule.create({
+          data: { versionId: created.id, applicationTypeId: clonedType.id, ...calculationRuleData(sourceOverride) }
+        });
+      }
 
       if (type.documents.length > 0) {
         await prisma.requiredDocument.createMany({
@@ -1785,6 +2055,7 @@ export async function importMasterDataAction(formData: FormData) {
   revalidatePath("/admin/master-data");
   revalidatePath("/applications/new");
 }
+
 
 
 

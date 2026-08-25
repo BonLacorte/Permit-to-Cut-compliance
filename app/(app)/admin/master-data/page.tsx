@@ -40,11 +40,15 @@ import {
 } from "@/app/actions";
 import { ConfirmDeleteForm } from "@/components/confirm-delete-form";
 import { ExportExcelButton } from "@/components/export-excel-button";
+import { PtcCalculationRulesManager } from "@/components/ptc-calculation-rules-manager";
 import { SubmitButton } from "@/components/submit-button";
 import { VersionFilter } from "@/components/version-filter";
 import { requireAdmin } from "@/lib/auth";
 import { getApplicationTypesWithDocuments, getDeactivatedMasterData, getOfficeChoices, getPttTransportTypes, getVersionContext } from "@/lib/data";
 import { PERMIT_GROUP_PTT } from "@/lib/ptt";
+import { prisma } from "@/lib/prisma";
+import { ruleConfig } from "@/lib/ptc-calculation-rules";
+import { Role } from "@prisma/client";
 
 function requirementBadge(requirementMode: string) {
   if (requirementMode === "Optional") return <span className="badge neutral">Optional</span>;
@@ -62,14 +66,17 @@ function RequirementModeSelect({ defaultValue = "Required", disabled = false }: 
   );
 }
 export default async function MasterDataPage({ searchParams }: { searchParams?: { version?: string } }) {
-  await requireAdmin();
+  const user = await requireAdmin();
   const versionContext = await getVersionContext(searchParams?.version);
   const pttVersionContext = await getVersionContext(null, PERMIT_GROUP_PTT);
   const selectedVersionId = versionContext.selectedVersionId;
-  const [applicationTypes, officeChoices, deactivated] = await Promise.all([
+  const [applicationTypes, officeChoices, deactivated, calculationRules] = await Promise.all([
     getApplicationTypesWithDocuments({ versionId: selectedVersionId }),
     getOfficeChoices(),
-    getDeactivatedMasterData()
+    getDeactivatedMasterData(),
+    user.role === Role.SUPERADMIN && selectedVersionId
+      ? prisma.ptcCalculationRule.findMany({ where: { versionId: selectedVersionId }, orderBy: { applicationTypeId: "asc" } })
+      : Promise.resolve([])
   ]);
   const pttTransportTypes = await getPttTransportTypes(true);
   const deactivatedCount =
@@ -276,6 +283,13 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
       </section>
 
       <div className="master-data-group-title"><h2>PTC Application Types and Documents</h2><p className="muted">Manage active PTC choices for the selected Version.</p></div>
+
+      {user.role === Role.SUPERADMIN && selectedVersionId ? <PtcCalculationRulesManager
+        versionId={selectedVersionId}
+        versionName={versionContext.selectedVersionName}
+        applicationTypes={applicationTypes.map((type) => ({ id: type.id, name: type.name }))}
+        rules={calculationRules.map((rule) => ({ applicationTypeId: rule.applicationTypeId, config: ruleConfig(rule) }))}
+      /> : null}
 
       <section className="grid cols-2">
         <form action={createApplicationTypeAction} className="panel form">

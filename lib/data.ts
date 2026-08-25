@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { mergeRemarks } from "@/lib/ptc-checks";
 import { PERMIT_GROUP_PTC } from "@/lib/ptc";
 import { PERMIT_GROUP_PTT } from "@/lib/ptt";
 import {
@@ -160,6 +161,7 @@ export async function getReportData(options: VersionScopedOptions = {}) {
         applicationType: true,
         createdBy: true,
         editedBy: true,
+        checkFindings: { where: { active: true }, select: { message: true } },
         progressDocuments: { include: { requiredDocument: true } }
       },
       orderBy: { createdAt: "desc" }
@@ -198,7 +200,8 @@ export async function getReportData(options: VersionScopedOptions = {}) {
     applicationTypeVersionId: record.applicationType?.versionId || null,
     applicationTypeName: record.versionId ? record.applicationType?.name || "Pending" : "Pending",
     selectedDocumentIds: record.progressDocuments.map((doc) => doc.requiredDocumentId),
-    remarks: record.remarks || "",
+    manualRemarks: record.remarks || "",
+    remarks: mergeRemarks(record.remarks, record.checkFindings.map((finding) => finding.message)),
     createdByName: record.createdBy.name,
     editedByName: record.editedBy?.name || "",
     ptcNumber: record.ptcNumber,

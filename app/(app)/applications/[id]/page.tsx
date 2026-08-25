@@ -6,6 +6,8 @@ import { getApplicationTypesWithDocuments, getOfficeChoices, getReportData, getV
 import { displayApplicantName, displayLocExemption, displayPtcField, displayReplantedSeedlings, feesMatch, formatDate, formatFee, formatSignedFeeDifference, formatValidityDays } from "@/lib/ptc";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
 import { prisma } from "@/lib/prisma";
+import { requireUser, userHasFeature } from "@/lib/auth";
+import { FeatureKey } from "@prisma/client";
 
 function metadataValue(value: string) {
   return value || <span className="muted">Blank</span>;
@@ -16,7 +18,8 @@ function formNumberValue(value: unknown) {
 }
 
 export default async function ApplicationDetailPage({ params }: { params: { id: string } }) {
-  const [record, applicationTypes, officeChoices, report, versionContext] = await Promise.all([
+  const [user, record, applicationTypes, officeChoices, report, versionContext] = await Promise.all([
+    requireUser(),
     prisma.applicationRecord.findUnique({
       where: { id: params.id },
       include: {
@@ -26,7 +29,9 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
         progressEntries: {
           include: { user: true, documents: { include: { requiredDocument: true } } },
           orderBy: { createdAt: "desc" }
-        }
+        },
+        checkFindings: { where: { active: true }, orderBy: { checkType: "asc" } },
+        checkRuns: { include: { appliedBy: true }, orderBy: { createdAt: "desc" } }
       }
     }),
     getApplicationTypesWithDocuments(),
@@ -36,6 +41,10 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
   ]);
 
   if (!record) notFound();
+  const [fees, validity] = await Promise.all([
+    userHasFeature(user, FeatureKey.PTC_FEES_CHECKER),
+    userHasFeature(user, FeatureKey.PTC_VALIDITY_CHECKER)
+  ]);
   const audit = report.audits.find((item) => item.id === record.id);
   if (!audit) notFound();
   const existingDocumentIds = record.progressDocuments.map((doc) => doc.requiredDocumentId);
@@ -52,6 +61,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
   }));
   const applicantName = displayApplicantName(record);
   const dateIssued = formatDate(record.dateIssued);
+  const dateIssuedInput = record.dateIssued ? record.dateIssued.toISOString().slice(0, 10) : "";
   const recordVersionParam = record.versionId || UNCATEGORIZED_VERSION;
 
   return (
@@ -67,7 +77,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
             remarks: record.remarks || "",
             selectedDocumentIds: existingDocumentIds,
             returnTo: `/applications/${record.id}`,
-            dateIssued,
+            dateIssued: dateIssuedInput,
             ptcNumber: record.ptcNumber || "",
             regionalOffice: record.regionalOffice || "",
             provincialOffice: record.provincialOffice || "",
@@ -90,6 +100,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
           applicationTypes={applicationTypeOptions}
           officeChoices={officeOptions}
           versionOptions={versionContext.options}
+          checkerAccess={{ fees, validity }}
         />
       </div>
 
@@ -164,6 +175,19 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
             {audit.missingDocuments.length === 0 ? <li>No missing documents.</li> : null}
           </ul>
         </div>
+      </section>
+
+      <section className="panel">
+        <h2>System Check Findings</h2>
+        {record.checkFindings.length > 0 ? <ul>{record.checkFindings.map((finding) => <li key={finding.id}>{finding.message}</li>)}</ul> : <p className="muted">No active system findings.</p>}
+      </section>
+
+      <section className="panel">
+        <h2>Calculation History</h2>
+        <div className="table-wrap"><table><thead><tr><th>Check</th><th>Result</th><th>Applied By</th><th>Date</th></tr></thead><tbody>
+          {record.checkRuns.map((run) => <tr key={run.id}><td>{run.checkType}</td><td>{JSON.stringify(run.outputSnapshot)}</td><td>{run.appliedBy.name}</td><td>{formatDate(run.createdAt)}</td></tr>)}
+          {record.checkRuns.length === 0 ? <tr><td colSpan={4}>No checker results saved.</td></tr> : null}
+        </tbody></table></div>
       </section>
 
       <section className="panel">

@@ -4,13 +4,17 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:local": "powershell -ExecutionPolicy Bypass -File scripts/start-local-dev.ps1",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "superadmin:create": "powershell -ExecutionPolicy Bypass -File scripts/create-superadmin.ps1",
+    "superadmin:reset-password": "powershell -ExecutionPolicy Bypass -File scripts/reset-local-superadmin-password.ps1",
+    "superadmin:create:production": "powershell -ExecutionPolicy Bypass -File scripts/create-production-superadmin.ps1"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
+import { FeatureKey, Role } from "@prisma/client";
 
 const COOKIE_NAME = "grounds_session";
 
@@ -62,7 +63,31 @@ export async function requireUser() {
 
 export async function requireAdmin() {
   const user = await requireUser();
-  if (user.role !== "ADMIN") redirect("/dashboard");
+  if (user.role !== Role.ADMIN && user.role !== Role.SUPERADMIN) redirect("/dashboard");
+  return user;
+}
+
+export async function requireSuperadmin() {
+  const user = await requireUser();
+  if (user.role !== Role.SUPERADMIN) redirect("/dashboard");
+  return user;
+}
+
+export async function getUserFeatureKeys(userId: string, role?: Role) {
+  if (role === Role.SUPERADMIN) return new Set(Object.values(FeatureKey));
+  const rows = await prisma.userFeatureAccess.findMany({ where: { userId }, select: { feature: true } });
+  return new Set(rows.map((row) => row.feature));
+}
+
+export async function userHasFeature(user: { id: string; role: Role }, feature: FeatureKey) {
+  if (user.role === Role.SUPERADMIN) return true;
+  if (user.role !== Role.ADMIN) return false;
+  return (await prisma.userFeatureAccess.count({ where: { userId: user.id, feature } })) > 0;
+}
+
+export async function requireFeature(feature: FeatureKey) {
+  const user = await requireUser();
+  if (!(await userHasFeature(user, feature))) redirect("/dashboard");
   return user;
 }
 

@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { bulkAssignApplicationVersionAction, bulkDeleteApplicationRecordsAction, deleteAllApplicationRecordsAction, deleteApplicationRecordAction, updateApplicationRecordAction } from "@/app/actions";
+import { bulkAssignApplicationVersionAction, bulkDeleteApplicationRecordsAction, deleteAllApplicationRecordsAction, deleteApplicationRecordAction } from "@/app/actions";
 import { BulletList } from "@/components/bullet-list";
-import { EditSubmittedFiles, type ApplicationTypeOption } from "@/components/edit-submitted-files";
-import { PtcRecordFields } from "@/components/ptc-record-fields";
+import { EditApplicationButton } from "@/components/edit-application-button";
+import type { ApplicationTypeOption } from "@/components/edit-submitted-files";
 import { StatusBadge } from "@/components/status-badge";
 import { SubmitButton } from "@/components/submit-button";
 import type { VersionOption } from "@/components/document-picker";
@@ -28,8 +28,10 @@ type Row = {
   selectedDocuments: string[];
   selectedDocumentIds: string[];
   remarks: string;
+  manualRemarks: string;
   editedByName: string;
   dateIssued: string;
+  dateIssuedValue?: string | null;
   ptcNumber: string;
   regionalOffice: string;
   provincialOffice: string;
@@ -99,7 +101,8 @@ export function ApplicationsTable({
   versionOptions,
   selectedVersionParam,
   allVersionRecordCount,
-  canBulkDelete = false
+  canBulkDelete = false,
+  checkerAccess
 }: {
   rows: Row[];
   applicationTypes: ApplicationTypeOption[];
@@ -108,12 +111,12 @@ export function ApplicationsTable({
   selectedVersionParam: string;
   allVersionRecordCount: number;
   canBulkDelete?: boolean;
+  checkerAccess: { fees: boolean; validity: boolean };
 }) {
   const [query, setQuery] = useState("");
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<{ key: SortKey; direction: "asc" | "desc" }>({ key: "applicantName", direction: "asc" });
-  const [editing, setEditing] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState<Row | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkAssigning, setBulkAssigning] = useState(false);
@@ -339,7 +342,7 @@ export function ApplicationsTable({
                 <td><StatusBadge status={row.status} /></td>
                 <td>{row.remarks || <span className="muted">No remarks</span>}</td>
                 <td>{row.editedByName || <span className="muted">Blank</span>}</td>
-                <td><div className="actions compact-actions"><Link className="button secondary" href={`/applications/${row.id}`}>View</Link><button className="button secondary" type="button" onClick={() => setEditing(row)}>Edit</button><button className="button danger" type="button" onClick={() => setDeleting(row)}>Delete</button></div></td>
+                <td><div className="actions compact-actions"><Link className="button secondary" href={`/applications/${row.id}`}>View</Link><EditApplicationButton record={{ ...row, remarks: row.manualRemarks, dateIssued: row.dateIssuedValue || "", returnTo: `/applications?version=${selectedVersionParam}` }} applicationTypes={applicationTypes} officeChoices={officeChoices} versionOptions={versionOptions} checkerAccess={checkerAccess} /><button className="button danger" type="button" onClick={() => setDeleting(row)}>Delete</button></div></td>
               </tr>
             ))}
             {visible.length === 0 ? <tr><td colSpan={tableColSpan}>No records found.</td></tr> : null}
@@ -361,23 +364,6 @@ export function ApplicationsTable({
           <div><h3>Danger Zone</h3><p className="muted">Advanced destructive actions are hidden here to prevent accidental clicks.</p></div>
           {!showDangerZone ? <button className="button secondary" type="button" onClick={() => setShowDangerZone(true)}>Show delete all options</button> : <div className="danger-zone-actions"><p>Delete every PTC application record across all Versions, including saved progress and submitted documents.</p><button className="button danger" type="button" disabled={allVersionRecordCount === 0} onClick={() => { setDeleteAllConfirmation(""); setDeleteAllOpen(true); }}>Delete All PTC Applications</button></div>}
         </section>
-      ) : null}
-
-      {editing ? (
-        <div className="modal-backdrop" role="dialog" aria-modal="true">
-          <div className="modal wide-modal">
-            <h2>Edit Application</h2>
-            <form action={updateApplicationRecordAction} className="form" onSubmit={() => setEditing(null)}>
-              <input type="hidden" name="id" value={editing.id} />
-              <input type="hidden" name="returnTo" value={`/applications?version=${selectedVersionParam}`} />
-              <div className="field"><label>Name of Applicant</label><input name="applicantName" defaultValue={editing.applicantName} /></div>
-              <PtcRecordFields defaults={editing} officeChoices={officeChoices} />
-              <EditSubmittedFiles applicationTypes={applicationTypes} versionOptions={versionOptions} initialVersionId={editing.versionId} initialApplicationTypeId={editing.applicationTypeId} initialDocumentIds={editing.selectedDocumentIds} />
-              <div className="field"><label>Remarks</label><textarea name="remarks" defaultValue={editing.remarks} rows={4} /></div>
-              <div className="actions"><SubmitButton pendingText="Saving changes...">Save Changes</SubmitButton><button className="button secondary" type="button" onClick={() => setEditing(null)}>Cancel</button></div>
-            </form>
-          </div>
-        </div>
       ) : null}
 
       {deleting ? (

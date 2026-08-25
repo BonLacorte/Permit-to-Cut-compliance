@@ -2,10 +2,11 @@ import Link from "next/link";
 import { ApplicationsTable } from "@/components/applications-table";
 import { DashboardRegionFilter } from "@/components/dashboard-region-filter";
 import { VersionFilter } from "@/components/version-filter";
-import { requireUser } from "@/lib/auth";
+import { requireUser, userHasFeature } from "@/lib/auth";
 import { getApplicationTypesWithDocuments, getOfficeChoices, getReportData, getVersionContext } from "@/lib/data";
 import { dashboardRegionOptions, filterDashboardAuditsByRegion } from "@/lib/dashboard";
 import { blankDisplay, decimalOrZero, displayPtcField, displayLocExemption, displayReplantedSeedlings, feesMatch, feeDifference, formatDate, formatFee, formatSignedFeeDifference, formatValidityDays } from "@/lib/ptc";
+import { FeatureKey, Role } from "@prisma/client";
 
 function formNumberValue(value: unknown) {
   return value === null || value === undefined ? "" : String(value);
@@ -21,6 +22,10 @@ export default async function ApplicationsPage({ searchParams }: { searchParams?
     getOfficeChoices()
   ]);
   const regionOptions = dashboardRegionOptions(selectedReport.audits);
+  const [fees, validity] = await Promise.all([
+    userHasFeature(user, FeatureKey.PTC_FEES_CHECKER),
+    userHasFeature(user, FeatureKey.PTC_VALIDITY_CHECKER)
+  ]);
   const requestedRegion = Array.isArray(searchParams?.region) ? searchParams?.region[0] : searchParams?.region || "All";
   const selectedRegion = regionOptions.includes(requestedRegion) ? requestedRegion : "All";
   const audits = filterDashboardAuditsByRegion(selectedReport.audits, selectedRegion);
@@ -41,8 +46,10 @@ export default async function ApplicationsPage({ searchParams }: { searchParams?
     selectedDocuments: audit.selectedDocuments.map((doc) => doc.name),
     selectedDocumentIds: audit.selectedDocuments.map((doc) => doc.id),
     remarks: audit.remarks || "",
+    manualRemarks: audit.manualRemarks || "",
     editedByName: audit.editedByName || "",
     dateIssued: formatDate(audit.dateIssued),
+    dateIssuedValue: audit.dateIssued ? new Date(audit.dateIssued).toISOString().slice(0, 10) : "",
     ptcNumber: audit.ptcNumber || "",
     regionalOffice: audit.regionalOffice || "",
     provincialOffice: audit.provincialOffice || "",
@@ -94,7 +101,8 @@ export default async function ApplicationsPage({ searchParams }: { searchParams?
         <ApplicationsTable
           rows={rows}
           allVersionRecordCount={allVersionsReport.completion.total}
-          canBulkDelete={user.role === "ADMIN"}
+          canBulkDelete={user.role === Role.ADMIN || user.role === Role.SUPERADMIN}
+          checkerAccess={{ fees, validity }}
           versionOptions={versionContext.options}
           selectedVersionParam={versionContext.selectedVersionParam}
           officeChoices={officeChoices.map((office) => ({
