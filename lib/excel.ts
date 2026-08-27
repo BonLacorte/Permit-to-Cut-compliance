@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { applicationSummary, completionSummary, documentCombinations, documentSummary, applicationExportRows, type RecordAudit, type RequiredDocumentRef } from "@/lib/reporting";
+import { applicationSummary, completionSummary, documentCombinations, documentCoverageExportRows, documentSummary, applicationExportRows, type RecordAudit, type RequiredDocumentRef } from "@/lib/reporting";
 import { pttDocumentSummaryRows, pttExportRows, type PttDisplayRecord } from "@/lib/ptt";
 
 export type ParsedPtcRecord = {
@@ -17,6 +17,20 @@ export type ParsedPtcRecord = {
   locExemption?: "Owner" | "Others";
 };
 
+export const PTC_IMPORT_COLUMNS = [
+  "Regional Office",
+  "Provincial Office",
+  "PTC Number",
+  "Date Issued",
+  "Name of Applicant",
+  "Barangay",
+  "Municipality",
+  "No. of trees applied",
+  "No. of trees approved",
+  "No. of Seedlings Replacement",
+  "Type of Application",
+  "LOC Exemption"
+] as const;
 export const PTT_IMPORT_COLUMNS = [
   "Regional Office",
   "Provincial Office",
@@ -137,6 +151,19 @@ function parseLocExemptionCell(value: unknown) {
   if (text === "others") return "Others";
   return undefined;
 }
+function parseDateText(value: string) {
+  const slashDate = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashDate) {
+    const day = Number(slashDate[1]);
+    const month = Number(slashDate[2]);
+    const year = Number(slashDate[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? date : undefined;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
 function parseDateCell(value: unknown) {
   if (value === null || value === undefined || value === "") return undefined;
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
@@ -145,30 +172,30 @@ function parseDateCell(value: unknown) {
     if (!parsed) return undefined;
     return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d));
   }
-  const text = String(value).trim();
-  if (!text) return undefined;
-  const date = new Date(text);
-  return Number.isNaN(date.getTime()) ? undefined : date;
+  const valueText = String(value).trim();
+  if (!valueText) return undefined;
+  return parseDateText(valueText);
 }
-
 export function parsePtcRecordsWorkbook(buffer: Buffer): ParsedPtcRecord[] {
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: true });
-  return rows.slice(1).map((row) => ({
-    regionalOffice: cellText(row[0]) || undefined,
-    provincialOffice: cellText(row[1]) || undefined,
-    ptcNumber: cellText(row[2]) || undefined,
-    dateIssued: parseDateCell(row[3]),
-    applicantName: cellText(row[4]) || undefined,
-    barangay: cellText(row[5]) || undefined,
-    municipality: cellText(row[6]) || undefined,
-    treesApplied: parseNumberCell(row[7]),
-    treesApproved: parseNumberCell(row[8]),
-    seedlingsReplacement: parseNumberCell(row[9]),
-    applicationTypeName: cellText(row[10]) || undefined,
-    locExemption: parseLocExemptionCell(row[11])
-  }));
+  return rows.slice(1)
+    .filter((row) => row.some((cell) => cellText(cell)))
+    .map((row) => ({
+      regionalOffice: cellText(row[0]) || undefined,
+      provincialOffice: cellText(row[1]) || undefined,
+      ptcNumber: cellText(row[2]) || undefined,
+      dateIssued: parseDateCell(row[3]),
+      applicantName: cellText(row[4]) || undefined,
+      barangay: cellText(row[5]) || undefined,
+      municipality: cellText(row[6]) || undefined,
+      treesApplied: parseNumberCell(row[7]),
+      treesApproved: parseNumberCell(row[8]),
+      seedlingsReplacement: parseNumberCell(row[9]),
+      applicationTypeName: cellText(row[10]) || undefined,
+      locExemption: parseLocExemptionCell(row[11])
+    }));
 }
 
 export function parsePttRecordsWorkbook(buffer: Buffer): ParsedPttRecord[] {
@@ -232,6 +259,7 @@ export function buildReportWorkbook(audits: RecordAudit[], requiredDocuments: Re
 
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(applicationExportRows(audits)), "Applications");
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(docSummary), "Document Summary");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(documentCoverageExportRows(audits, requiredDocuments)), "Document Coverage");
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(appSummary), "Application Summary");
   XLSX.utils.book_append_sheet(
     workbook,
@@ -254,5 +282,12 @@ export function buildPttImportTemplateWorkbook() {
   const workbook = XLSX.utils.book_new();
   const sheet = XLSX.utils.aoa_to_sheet([[...PTT_IMPORT_COLUMNS]]);
   XLSX.utils.book_append_sheet(workbook, sheet, "PTT Import");
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
+}
+
+export function buildPtcImportTemplateWorkbook() {
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([[...PTC_IMPORT_COLUMNS]]);
+  XLSX.utils.book_append_sheet(workbook, sheet, "PTC Import");
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
 }

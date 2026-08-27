@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/components/toast";
+import { buildExportFilename } from "@/lib/export-filename";
 
 type ExportOfficeChoice = {
   name: string;
@@ -11,6 +12,7 @@ type ExportOfficeChoice = {
 type ExportExcelButtonProps = {
   className?: string;
   versionId?: string;
+  versionName?: string;
   group?: "PTC" | "PTT";
   regions?: string[];
   officeChoices?: ExportOfficeChoice[];
@@ -18,6 +20,13 @@ type ExportExcelButtonProps = {
   filename?: string;
 };
 
+function filenameFromContentDisposition(value: string | null) {
+  if (!value) return "";
+  const utfMatch = value.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utfMatch?.[1]) return decodeURIComponent(utfMatch[1]);
+  const plainMatch = value.match(/filename="?([^";]+)"?/i);
+  return plainMatch?.[1] || "";
+}
 function sortedUnique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b));
 }
@@ -25,11 +34,12 @@ function sortedUnique(values: string[]) {
 export function ExportExcelButton({
   className = "button secondary",
   versionId,
+  versionName,
   group = "PTC",
   regions = [],
   officeChoices = [],
   label = "Export Excel",
-  filename = group === "PTT" ? "ptt-applications.xlsx" : "grounds-compliance-report.xlsx"
+  filename
 }: ExportExcelButtonProps) {
   const [loading, setLoading] = useState(false);
   const [region, setRegion] = useState("All");
@@ -73,9 +83,10 @@ export function ExportExcelButton({
       if (!response.ok) throw new Error("Export failed.");
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
+      const fallbackFilename = filename || buildExportFilename({ group, versionName, versionId, region, provincialOffice });
       const link = document.createElement("a");
       link.href = downloadUrl;
-      link.download = filename;
+      link.download = filenameFromContentDisposition(response.headers.get("Content-Disposition")) || fallbackFilename;
       document.body.appendChild(link);
       link.click();
       link.remove();

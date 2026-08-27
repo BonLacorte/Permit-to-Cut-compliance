@@ -7,6 +7,8 @@ import { z } from "zod";
 import { clearSession, requireAdmin, requireSuperadmin, requireUser, setSession, userHasFeature } from "@/lib/auth";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { parseGroundsWorkbook, parsePtcRecordsWorkbook, parsePttRecordsWorkbook } from "@/lib/excel";
+import { checkPtcImportWorkbook, checkPttImportWorkbook } from "@/lib/import-checker";
+import { ptcImportCheckContext, pttImportCheckContext } from "@/lib/import-checker-context";
 import { PERMIT_GROUP_PTC } from "@/lib/ptc";
 import { PERMIT_GROUP_PTT } from "@/lib/ptt";
 import { prisma } from "@/lib/prisma";
@@ -299,6 +301,18 @@ function safeReturnTo(value: FormDataEntryValue | null, fallback: string) {
   return path.startsWith("/") && !path.startsWith("//") ? path : fallback;
 }
 
+function masterDataReturnTo(formData: FormData, fallback: string) {
+  const returnTo = safeReturnTo(formData.get("returnTo"), fallback);
+  return returnTo.startsWith("/admin/master-data") ? returnTo : fallback;
+}
+
+function withVersionParam(path: string, versionId: string | null | undefined) {
+  if (!versionId) return path;
+  const [base, query = ""] = path.split("?");
+  const params = new URLSearchParams(query);
+  params.set("version", versionId);
+  return `${base}?${params.toString()}`;
+}
 function withToast(path: string, type: "success" | "error", message: string) {
   const [base, query = ""] = path.split("?");
   const params = new URLSearchParams(query);
@@ -1038,15 +1052,16 @@ function calculationConfigFromFormData(formData: FormData) {
 
 export async function savePtcCalculationRuleAction(formData: FormData) {
   const superadmin = await requireSuperadmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptc");
   const versionId = String(formData.get("versionId") || "");
   const applicationTypeId = nullableString(formData.get("applicationTypeId"));
-  if (!versionId) redirectWithToast("/admin/master-data", "error", "Choose a PTC Version before saving calculation rules.");
+  if (!versionId) redirectWithToast(returnTo, "error", "Choose a PTC Version before saving calculation rules.");
   try {
     const version = await prisma.ptcVersion.findFirst({ where: { id: versionId, group: PERMIT_GROUP_PTC } });
-    if (!version) redirectWithToast("/admin/master-data", "error", "PTC Version was not found.");
+    if (!version) redirectWithToast(returnTo, "error", "PTC Version was not found.");
     if (applicationTypeId) {
       const applicationType = await prisma.applicationType.findFirst({ where: { id: applicationTypeId, versionId, group: PERMIT_GROUP_PTC } });
-      if (!applicationType) redirectWithToast("/admin/master-data", "error", "The selected Type of Application does not belong to this Version.");
+      if (!applicationType) redirectWithToast(returnTo, "error", "The selected Type of Application does not belong to this Version.");
     }
     const config = calculationConfigFromFormData(formData);
     const data = { ...config };
@@ -1066,31 +1081,33 @@ export async function savePtcCalculationRuleAction(formData: FormData) {
     });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", error instanceof Error ? error.message : "Could not save PTC calculation rules.");
+    redirectWithToast(returnTo, "error", error instanceof Error ? error.message : "Could not save PTC calculation rules.");
   }
 
   revalidatePath("/admin/master-data");
-  redirectWithToast(`/admin/master-data?version=${versionId}`, "success", applicationTypeId ? "Type of Application calculation override saved." : "Version calculation rules saved.");
+  redirectWithToast(withVersionParam(returnTo, versionId), "success", applicationTypeId ? "Type of Application calculation override saved." : "Version calculation rules saved.");
 }
 
 export async function resetPtcApplicationTypeRuleAction(formData: FormData) {
   const superadmin = await requireSuperadmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptc");
   const versionId = String(formData.get("versionId") || "");
   const applicationTypeId = String(formData.get("applicationTypeId") || "");
-  if (!versionId || !applicationTypeId) redirectWithToast("/admin/master-data", "error", "Version and Type of Application are required.");
+  if (!versionId || !applicationTypeId) redirectWithToast(returnTo, "error", "Version and Type of Application are required.");
   await prisma.ptcCalculationRule.deleteMany({ where: { versionId, applicationTypeId } });
   await prisma.activityLog.create({
     data: { userId: superadmin.id, action: "RESET_PTC_CALCULATION_RULE_OVERRIDE", targetType: "ptc_calculation_rule", metadata: { versionId, applicationTypeId } }
   });
   revalidatePath("/admin/master-data");
-  redirectWithToast(`/admin/master-data?version=${versionId}`, "success", "Type of Application now inherits the Version calculation rules.");
+  redirectWithToast(withVersionParam(returnTo, versionId), "success", "Type of Application now inherits the Version calculation rules.");
 }
 
 export async function createPtcVersionAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptc");
   const name = String(formData.get("name") || "").trim();
   const description = nullableString(formData.get("description"));
-  if (!name) redirectWithToast("/admin/master-data", "error", "Version name is required.");
+  if (!name) redirectWithToast(returnTo, "error", "Version name is required.");
 
   try {
     const count = await prisma.ptcVersion.count({ where: { group: PERMIT_GROUP_PTC } });
@@ -1102,19 +1119,20 @@ export async function createPtcVersionAction(formData: FormData) {
     const existingRule = await prisma.ptcCalculationRule.findFirst({ where: { versionId: version.id, applicationTypeId: null } });
     if (!existingRule) await prisma.ptcCalculationRule.create({ data: { versionId: version.id, ...defaultRuleData() } });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not create the Version. The name may already exist.");
+    redirectWithToast(returnTo, "error", "Could not create the Version. The name may already exist.");
   }
 
   revalidatePath("/admin/master-data");
   revalidateReports();
-  redirectWithToast("/admin/master-data", "success", "Version created.");
+  redirectWithToast(returnTo, "success", "Version created.");
 }
 export async function clonePtcVersionAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptc");
   const sourceVersionId = String(formData.get("sourceVersionId") || "");
   const name = String(formData.get("name") || "").trim();
   const description = nullableString(formData.get("description"));
-  if (!sourceVersionId || !name) redirectWithToast("/admin/master-data", "error", "Source Version and new Version name are required.");
+  if (!sourceVersionId || !name) redirectWithToast(returnTo, "error", "Source Version and new Version name are required.");
 
   let createdVersionId = "";
   try {
@@ -1129,9 +1147,9 @@ export async function clonePtcVersionAction(formData: FormData) {
         }
       }
     });
-    if (!source) redirectWithToast("/admin/master-data", "error", "Source Version was not found.");
+    if (!source) redirectWithToast(returnTo, "error", "Source Version was not found.");
     const existing = await prisma.ptcVersion.findUnique({ where: { group_name: { group: PERMIT_GROUP_PTC, name } } });
-    if (existing) redirectWithToast("/admin/master-data", "error", "A Version with that name already exists.");
+    if (existing) redirectWithToast(returnTo, "error", "A Version with that name already exists.");
     const count = await prisma.ptcVersion.count({ where: { group: PERMIT_GROUP_PTC } });
 
     const created = await prisma.ptcVersion.create({
@@ -1187,40 +1205,42 @@ export async function clonePtcVersionAction(formData: FormData) {
         console.error("Clone PTC Version cleanup failed", cleanupError);
       }
     }
-    redirectWithToast("/admin/master-data", "error", "Could not clone the Version.");
+    redirectWithToast(returnTo, "error", "Could not clone the Version.");
   }
 
   revalidatePath("/admin/master-data");
   revalidateReports();
-  redirectWithToast(`/admin/master-data?version=${createdVersionId}`, "success", `Version cloned as ${name}.`);
+  redirectWithToast(withVersionParam(returnTo, createdVersionId), "success", `Version cloned as ${name}.`);
 }
 
 export async function updatePtcVersionAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptc");
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
   const description = nullableString(formData.get("description"));
-  if (!id || !name) redirectWithToast("/admin/master-data", "error", "Version name is required.");
+  if (!id || !name) redirectWithToast(returnTo, "error", "Version name is required.");
 
   try {
     await prisma.ptcVersion.update({ where: { id }, data: { name, description, active: true } });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not update the Version. The name may already exist.");
+    redirectWithToast(returnTo, "error", "Could not update the Version. The name may already exist.");
   }
 
   revalidatePath("/admin/master-data");
   revalidateReports();
-  redirectWithToast(`/admin/master-data?version=${id}`, "success", "Version updated.");
+  redirectWithToast(withVersionParam(returnTo, id), "success", "Version updated.");
 }
 
 export async function deletePtcVersionAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptc");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "Version id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "Version id is required.");
 
   try {
     const version = await prisma.ptcVersion.findFirst({ where: { id, group: PERMIT_GROUP_PTC } });
-    if (!version) redirectWithToast("/admin/master-data", "error", "Version was not found.");
+    if (!version) redirectWithToast(returnTo, "error", "Version was not found.");
 
     await prisma.$transaction(async (tx) => {
       await tx.requiredDocument.updateMany({
@@ -1232,19 +1252,20 @@ export async function deletePtcVersionAction(formData: FormData) {
     });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not deactivate the Version.");
+    redirectWithToast(returnTo, "error", "Could not deactivate the Version.");
   }
 
   revalidatePath("/admin/master-data");
   revalidateReports();
-  redirectWithToast("/admin/master-data", "success", "Version deactivated.");
+  redirectWithToast(returnTo, "success", "Version deactivated.");
 }
 
 export async function createPttVersionAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptt");
   const name = String(formData.get("name") || "").trim();
   const description = nullableString(formData.get("description"));
-  if (!name) redirectWithToast("/admin/master-data", "error", "PTT Version name is required.");
+  if (!name) redirectWithToast(returnTo, "error", "PTT Version name is required.");
 
   try {
     const count = await prisma.ptcVersion.count({ where: { group: PERMIT_GROUP_PTT } });
@@ -1254,60 +1275,63 @@ export async function createPttVersionAction(formData: FormData) {
       create: { group: PERMIT_GROUP_PTT, name, description, sortOrder: count + 1 }
     });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not create the PTT Version. The name may already exist.");
+    redirectWithToast(returnTo, "error", "Could not create the PTT Version. The name may already exist.");
   }
 
   revalidatePttApplications();
-  redirectWithToast("/admin/master-data", "success", "PTT Version created.");
+  redirectWithToast(returnTo, "success", "PTT Version created.");
 }
 
 export async function updatePttVersionAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptt");
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
   const description = nullableString(formData.get("description"));
-  if (!id || !name) redirectWithToast("/admin/master-data", "error", "PTT Version name is required.");
+  if (!id || !name) redirectWithToast(returnTo, "error", "PTT Version name is required.");
 
   try {
     const version = await prisma.ptcVersion.findFirst({ where: { id, group: PERMIT_GROUP_PTT } });
-    if (!version) redirectWithToast("/admin/master-data", "error", "PTT Version was not found.");
+    if (!version) redirectWithToast(returnTo, "error", "PTT Version was not found.");
     await prisma.ptcVersion.update({ where: { id }, data: { name, description } });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not update the PTT Version. The name may already exist.");
+    redirectWithToast(returnTo, "error", "Could not update the PTT Version. The name may already exist.");
   }
 
   revalidatePttApplications();
-  redirectWithToast("/admin/master-data", "success", "PTT Version updated.");
+  redirectWithToast(returnTo, "success", "PTT Version updated.");
 }
 
 export async function deletePttVersionAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptt");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "PTT Version id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "PTT Version id is required.");
 
   try {
     const version = await prisma.ptcVersion.findFirst({ where: { id, group: PERMIT_GROUP_PTT } });
-    if (!version) redirectWithToast("/admin/master-data", "error", "PTT Version was not found.");
+    if (!version) redirectWithToast(returnTo, "error", "PTT Version was not found.");
     await prisma.ptcVersion.update({ where: { id }, data: { active: false } });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not deactivate the PTT Version.");
+    redirectWithToast(returnTo, "error", "Could not deactivate the PTT Version.");
   }
 
   revalidatePttApplications();
-  redirectWithToast("/admin/master-data", "success", "PTT Version deactivated.");
+  redirectWithToast(returnTo, "success", "PTT Version deactivated.");
 }
 
 export async function createPttTransportTypeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptt");
   const versionId = String(formData.get("versionId") || "");
   const name = String(formData.get("name") || "").trim();
-  if (!versionId || !name) redirectWithToast("/admin/master-data", "error", "PTT Version and transport type are required.");
+  if (!versionId || !name) redirectWithToast(returnTo, "error", "PTT Version and transport type are required.");
 
   try {
     const version = await prisma.ptcVersion.findFirst({ where: { id: versionId, group: PERMIT_GROUP_PTT, active: true } });
-    if (!version) redirectWithToast("/admin/master-data", "error", "Selected PTT Version was not found.");
+    if (!version) redirectWithToast(returnTo, "error", "Selected PTT Version was not found.");
     const count = await prisma.pttTransportType.count({ where: { versionId } });
     await prisma.pttTransportType.upsert({
       where: { versionId_name: { versionId, name } },
@@ -1316,56 +1340,59 @@ export async function createPttTransportTypeAction(formData: FormData) {
     });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not add the PTT transport type. It may already exist in this Version.");
+    redirectWithToast(returnTo, "error", "Could not add the PTT transport type. It may already exist in this Version.");
   }
 
   revalidatePttApplications();
-  redirectWithToast("/admin/master-data", "success", "PTT transport type added.");
+  redirectWithToast(returnTo, "success", "PTT transport type added.");
 }
 
 export async function updatePttTransportTypeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptt");
   const id = String(formData.get("id") || "");
   const versionId = String(formData.get("versionId") || "");
   const name = String(formData.get("name") || "").trim();
-  if (!id || !versionId || !name) redirectWithToast("/admin/master-data", "error", "PTT Version and transport type are required.");
+  if (!id || !versionId || !name) redirectWithToast(returnTo, "error", "PTT Version and transport type are required.");
 
   try {
     const version = await prisma.ptcVersion.findFirst({ where: { id: versionId, group: PERMIT_GROUP_PTT } });
-    if (!version) redirectWithToast("/admin/master-data", "error", "Selected PTT Version was not found.");
+    if (!version) redirectWithToast(returnTo, "error", "Selected PTT Version was not found.");
     await prisma.pttTransportType.update({ where: { id }, data: { versionId, name, active: true } });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not update the PTT transport type. It may already exist in this Version.");
+    redirectWithToast(returnTo, "error", "Could not update the PTT transport type. It may already exist in this Version.");
   }
 
   revalidatePttApplications();
-  redirectWithToast("/admin/master-data", "success", "PTT transport type updated.");
+  redirectWithToast(returnTo, "success", "PTT transport type updated.");
 }
 
 export async function deletePttTransportTypeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptt");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "PTT transport type id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "PTT transport type id is required.");
 
   try {
     await prisma.pttTransportType.update({ where: { id }, data: { active: false } });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not delete the PTT transport type.");
+    redirectWithToast(returnTo, "error", "Could not delete the PTT transport type.");
   }
 
   revalidatePttApplications();
-  redirectWithToast("/admin/master-data", "success", "PTT transport type deleted.");
+  redirectWithToast(returnTo, "success", "PTT transport type deleted.");
 }
 export async function createApplicationTypeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptc");
   const versionId = String(formData.get("versionId") || "");
   const name = String(formData.get("name") || "").trim();
-  if (!versionId || !name) redirectWithToast("/admin/master-data", "error", "Version and application type name are required.");
+  if (!versionId || !name) redirectWithToast(returnTo, "error", "Version and application type name are required.");
 
   try {
     const version = await prisma.ptcVersion.findFirst({ where: { id: versionId, group: PERMIT_GROUP_PTC, active: true } });
-    if (!version) redirectWithToast("/admin/master-data", "error", "Selected Version was not found.");
+    if (!version) redirectWithToast(returnTo, "error", "Selected Version was not found.");
     const count = await prisma.applicationType.count({ where: { group: PERMIT_GROUP_PTC, versionId } });
     await prisma.applicationType.upsert({
       where: { versionId_name: { versionId, name } },
@@ -1374,112 +1401,118 @@ export async function createApplicationTypeAction(formData: FormData) {
     });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not add the application type. It may already exist in this Version.");
+    redirectWithToast(returnTo, "error", "Could not add the application type. It may already exist in this Version.");
   }
 
   revalidatePath("/admin/master-data");
   revalidatePath("/applications/new");
   revalidateReports();
-  redirectWithToast(`/admin/master-data?version=${versionId}`, "success", "Application type added.");
+  redirectWithToast(withVersionParam(returnTo, versionId), "success", "Application type added.");
 }
 export async function createRequiredDocumentAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptc");
   const applicationTypeId = String(formData.get("applicationTypeId") || "");
   const name = String(formData.get("name") || "").trim();
   const requirementMode = documentRequirementMode(formData.get("requirementMode"));
-  if (!applicationTypeId || !name) redirectWithToast("/admin/master-data", "error", "Application type and document name are required.");
+  if (!applicationTypeId || !name) redirectWithToast(returnTo, "error", "Application type and document name are required.");
 
   try {
     const applicationType = await prisma.applicationType.findFirst({ where: { id: applicationTypeId, group: PERMIT_GROUP_PTC } });
-    if (!applicationType) redirectWithToast("/admin/master-data", "error", "Application type was not found.");
+    if (!applicationType) redirectWithToast(returnTo, "error", "Application type was not found.");
     const count = await prisma.requiredDocument.count({ where: { applicationTypeId } });
     await prisma.requiredDocument.upsert({ where: { applicationTypeId_name: { applicationTypeId, name } }, update: { active: true, requirementMode }, create: { applicationTypeId, name, requirementMode, sortOrder: count + 1 } });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not add the required document. It may already exist.");
+    redirectWithToast(returnTo, "error", "Could not add the required document. It may already exist.");
   }
 
   revalidatePath("/admin/master-data");
   revalidatePath("/applications/new");
   revalidateReports();
-  redirectWithToast("/admin/master-data", "success", "Required document added.");
+  redirectWithToast(returnTo, "success", "Required document added.");
 }
 
 
 export async function updateApplicationTypeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptc");
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
-  if (!id || !name) redirectWithToast("/admin/master-data", "error", "Application type name is required.");
+  if (!id || !name) redirectWithToast(returnTo, "error", "Application type name is required.");
 
   try {
     await prisma.applicationType.update({ where: { id }, data: { name, active: true } });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not update the application type. The name may already exist.");
+    redirectWithToast(returnTo, "error", "Could not update the application type. The name may already exist.");
   }
 
   revalidatePath("/admin/master-data");
   revalidatePath("/applications/new");
   revalidateReports();
-  redirectWithToast("/admin/master-data", "success", "Application type updated.");
+  redirectWithToast(returnTo, "success", "Application type updated.");
 }
 
 export async function deleteApplicationTypeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptc");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "Application type id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "Application type id is required.");
 
   try {
     await prisma.applicationType.update({ where: { id }, data: { active: false } });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not delete the application type.");
+    redirectWithToast(returnTo, "error", "Could not delete the application type.");
   }
 
   revalidatePath("/admin/master-data");
   revalidatePath("/applications/new");
   revalidateReports();
-  redirectWithToast("/admin/master-data", "success", "Application type deleted.");
+  redirectWithToast(returnTo, "success", "Application type deleted.");
 }
 
 export async function updateRequiredDocumentAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptc");
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
   const requirementMode = documentRequirementMode(formData.get("requirementMode"));
-  if (!id || !name) redirectWithToast("/admin/master-data", "error", "Document name is required.");
+  if (!id || !name) redirectWithToast(returnTo, "error", "Document name is required.");
 
   try {
     await prisma.requiredDocument.update({ where: { id }, data: { name, requirementMode, active: true } });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not update the required document. The name may already exist.");
+    redirectWithToast(returnTo, "error", "Could not update the required document. The name may already exist.");
   }
 
   revalidatePath("/admin/master-data");
   revalidatePath("/applications/new");
   revalidateReports();
-  redirectWithToast("/admin/master-data", "success", "Required document updated.");
+  redirectWithToast(returnTo, "success", "Required document updated.");
 }
 
 export async function deleteRequiredDocumentAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptc");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "Document id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "Document id is required.");
 
   try {
     await prisma.requiredDocument.update({ where: { id }, data: { active: false } });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not delete the required document.");
+    redirectWithToast(returnTo, "error", "Could not delete the required document.");
   }
 
   revalidatePath("/admin/master-data");
   revalidatePath("/applications/new");
   revalidateReports();
-  redirectWithToast("/admin/master-data", "success", "Required document deleted.");
+  redirectWithToast(returnTo, "success", "Required document deleted.");
 }
 
 export async function createRegionalOfficeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=general");
   const name = String(formData.get("name") || "").trim();
-  if (!name) redirectWithToast("/admin/master-data", "error", "Regional office name is required.");
+  if (!name) redirectWithToast(returnTo, "error", "Regional office name is required.");
 
   try {
     const count = await prisma.regionalOffice.count({ where: { group: PERMIT_GROUP_PTC } });
@@ -1489,33 +1522,35 @@ export async function createRegionalOfficeAction(formData: FormData) {
       create: { group: PERMIT_GROUP_PTC, name, sortOrder: count + 1 }
     });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not add the regional office.");
+    redirectWithToast(returnTo, "error", "Could not add the regional office.");
   }
 
   revalidatePath("/admin/master-data");
-  redirectWithToast("/admin/master-data", "success", "Regional office added.");
+  redirectWithToast(returnTo, "success", "Regional office added.");
 }
 
 export async function updateRegionalOfficeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=general");
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
-  if (!id || !name) redirectWithToast("/admin/master-data", "error", "Regional office name is required.");
+  if (!id || !name) redirectWithToast(returnTo, "error", "Regional office name is required.");
 
   try {
     await prisma.regionalOffice.update({ where: { id }, data: { name, active: true } });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not update the regional office. The name may already exist.");
+    redirectWithToast(returnTo, "error", "Could not update the regional office. The name may already exist.");
   }
 
   revalidatePath("/admin/master-data");
-  redirectWithToast("/admin/master-data", "success", "Regional office updated.");
+  redirectWithToast(returnTo, "success", "Regional office updated.");
 }
 
 export async function deleteRegionalOfficeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=general");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "Regional office id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "Regional office id is required.");
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -1523,22 +1558,23 @@ export async function deleteRegionalOfficeAction(formData: FormData) {
       await tx.regionalOffice.update({ where: { id }, data: { active: false } });
     });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not delete the regional office.");
+    redirectWithToast(returnTo, "error", "Could not delete the regional office.");
   }
 
   revalidatePath("/admin/master-data");
-  redirectWithToast("/admin/master-data", "success", "Regional office deleted.");
+  redirectWithToast(returnTo, "success", "Regional office deleted.");
 }
 
 export async function createProvincialOfficeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=general");
   const regionalOfficeId = String(formData.get("regionalOfficeId") || "");
   const name = String(formData.get("name") || "").trim();
-  if (!regionalOfficeId || !name) redirectWithToast("/admin/master-data", "error", "Regional office and provincial office name are required.");
+  if (!regionalOfficeId || !name) redirectWithToast(returnTo, "error", "Regional office and provincial office name are required.");
 
   try {
     const region = await prisma.regionalOffice.findFirst({ where: { id: regionalOfficeId, group: PERMIT_GROUP_PTC, active: true } });
-    if (!region) redirectWithToast("/admin/master-data", "error", "Regional office was not found.");
+    if (!region) redirectWithToast(returnTo, "error", "Regional office was not found.");
     const count = await prisma.provincialOffice.count({ where: { regionalOfficeId } });
     await prisma.provincialOffice.upsert({
       where: { regionalOfficeId_name: { regionalOfficeId, name } },
@@ -1546,65 +1582,69 @@ export async function createProvincialOfficeAction(formData: FormData) {
       create: { regionalOfficeId, name, sortOrder: count + 1 }
     });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not add the provincial office.");
+    redirectWithToast(returnTo, "error", "Could not add the provincial office.");
   }
 
   revalidatePath("/admin/master-data");
-  redirectWithToast("/admin/master-data", "success", "Provincial office added.");
+  redirectWithToast(returnTo, "success", "Provincial office added.");
 }
 
 export async function updateProvincialOfficeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=general");
   const id = String(formData.get("id") || "");
   const regionalOfficeId = String(formData.get("regionalOfficeId") || "");
   const name = String(formData.get("name") || "").trim();
-  if (!id || !regionalOfficeId || !name) redirectWithToast("/admin/master-data", "error", "Regional office and provincial office name are required.");
+  if (!id || !regionalOfficeId || !name) redirectWithToast(returnTo, "error", "Regional office and provincial office name are required.");
 
   try {
     await prisma.provincialOffice.update({ where: { id }, data: { regionalOfficeId, name, active: true } });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not update the provincial office. The name may already exist.");
+    redirectWithToast(returnTo, "error", "Could not update the provincial office. The name may already exist.");
   }
 
   revalidatePath("/admin/master-data");
-  redirectWithToast("/admin/master-data", "success", "Provincial office updated.");
+  redirectWithToast(returnTo, "success", "Provincial office updated.");
 }
 
 export async function deleteProvincialOfficeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=general");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "Provincial office id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "Provincial office id is required.");
 
   try {
     await prisma.provincialOffice.update({ where: { id }, data: { active: false } });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not delete the provincial office.");
+    redirectWithToast(returnTo, "error", "Could not delete the provincial office.");
   }
 
   revalidatePath("/admin/master-data");
-  redirectWithToast("/admin/master-data", "success", "Provincial office deleted.");
+  redirectWithToast(returnTo, "success", "Provincial office deleted.");
 }
 
 export async function restorePtcVersionAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=deactivated");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "Version id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "Version id is required.");
 
   try {
     await prisma.ptcVersion.update({ where: { id }, data: { active: true } });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not restore the Version.");
+    redirectWithToast(returnTo, "error", "Could not restore the Version.");
   }
 
   revalidatePath("/admin/master-data");
   revalidateReports();
-  redirectWithToast(`/admin/master-data?version=${id}`, "success", "Version restored.");
+  redirectWithToast(withVersionParam(returnTo, id), "success", "Version restored.");
 }
 
 export async function hardDeletePtcVersionAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=deactivated");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "Version id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "Version id is required.");
 
   try {
     const version = await prisma.ptcVersion.findUnique({
@@ -1614,11 +1654,11 @@ export async function hardDeletePtcVersionAction(formData: FormData) {
         applicationTypes: { include: { documents: { include: { progressDocuments: true } }, records: true } }
       }
     });
-    if (!version) redirectWithToast("/admin/master-data", "error", "Version was not found.");
-    if (version.active) redirectWithToast("/admin/master-data", "error", "Deactivate the Version before permanently deleting it.");
-    if (version.records.length > 0) redirectWithToast("/admin/master-data", "error", "Cannot permanently delete a Version assigned to application records.");
+    if (!version) redirectWithToast(returnTo, "error", "Version was not found.");
+    if (version.active) redirectWithToast(returnTo, "error", "Deactivate the Version before permanently deleting it.");
+    if (version.records.length > 0) redirectWithToast(returnTo, "error", "Cannot permanently delete a Version assigned to application records.");
     if (version.applicationTypes.some((type) => type.records.length > 0 || type.documents.some((doc) => doc.progressDocuments.length > 0))) {
-      redirectWithToast("/admin/master-data", "error", "Cannot permanently delete a Version whose application types or documents have history.");
+      redirectWithToast(returnTo, "error", "Cannot permanently delete a Version whose application types or documents have history.");
     }
 
     await prisma.$transaction(async (tx) => {
@@ -1628,278 +1668,296 @@ export async function hardDeletePtcVersionAction(formData: FormData) {
     });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not permanently delete the Version.");
+    redirectWithToast(returnTo, "error", "Could not permanently delete the Version.");
   }
 
   revalidatePath("/admin/master-data");
   revalidateReports();
-  redirectWithToast("/admin/master-data", "success", "Version and unused copied master data permanently deleted.");
+  redirectWithToast(returnTo, "success", "Version and unused copied master data permanently deleted.");
 }
 
 export async function restorePttVersionAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=deactivated");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "PTT Version id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "PTT Version id is required.");
 
   try {
     const version = await prisma.ptcVersion.findFirst({ where: { id, group: PERMIT_GROUP_PTT } });
-    if (!version) redirectWithToast("/admin/master-data", "error", "PTT Version was not found.");
+    if (!version) redirectWithToast(returnTo, "error", "PTT Version was not found.");
     await prisma.ptcVersion.update({ where: { id }, data: { active: true } });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not restore the PTT Version.");
+    redirectWithToast(returnTo, "error", "Could not restore the PTT Version.");
   }
 
   revalidatePttApplications();
-  redirectWithToast("/admin/master-data", "success", "PTT Version restored.");
+  redirectWithToast(returnTo, "success", "PTT Version restored.");
 }
 
 export async function hardDeletePttVersionAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=deactivated");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "PTT Version id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "PTT Version id is required.");
 
   try {
     const version = await prisma.ptcVersion.findFirst({
       where: { id, group: PERMIT_GROUP_PTT },
       include: { pttRecords: true }
     });
-    if (!version) redirectWithToast("/admin/master-data", "error", "PTT Version was not found.");
-    if (version.active) redirectWithToast("/admin/master-data", "error", "Deactivate the PTT Version before permanently deleting it.");
-    if (version.pttRecords.length > 0) redirectWithToast("/admin/master-data", "error", "Cannot permanently delete a PTT Version assigned to application records.");
+    if (!version) redirectWithToast(returnTo, "error", "PTT Version was not found.");
+    if (version.active) redirectWithToast(returnTo, "error", "Deactivate the PTT Version before permanently deleting it.");
+    if (version.pttRecords.length > 0) redirectWithToast(returnTo, "error", "Cannot permanently delete a PTT Version assigned to application records.");
     await prisma.ptcVersion.delete({ where: { id } });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not permanently delete the PTT Version.");
+    redirectWithToast(returnTo, "error", "Could not permanently delete the PTT Version.");
   }
 
   revalidatePttApplications();
-  redirectWithToast("/admin/master-data", "success", "PTT Version permanently deleted.");
+  redirectWithToast(returnTo, "success", "PTT Version permanently deleted.");
 }
 
 export async function restorePttTransportTypeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=deactivated");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "PTT transport type id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "PTT transport type id is required.");
 
   try {
     const type = await prisma.pttTransportType.findUnique({ where: { id }, include: { version: true } });
-    if (!type) redirectWithToast("/admin/master-data", "error", "PTT transport type was not found.");
-    if (!type.version.active) redirectWithToast("/admin/master-data", "error", "Restore the PTT Version before restoring this transport type.");
+    if (!type) redirectWithToast(returnTo, "error", "PTT transport type was not found.");
+    if (!type.version.active) redirectWithToast(returnTo, "error", "Restore the PTT Version before restoring this transport type.");
     await prisma.pttTransportType.update({ where: { id }, data: { active: true } });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not restore the PTT transport type.");
+    redirectWithToast(returnTo, "error", "Could not restore the PTT transport type.");
   }
 
   revalidatePttApplications();
-  redirectWithToast("/admin/master-data", "success", "PTT transport type restored.");
+  redirectWithToast(returnTo, "success", "PTT transport type restored.");
 }
 
 export async function hardDeletePttTransportTypeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=deactivated");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "PTT transport type id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "PTT transport type id is required.");
 
   try {
     const type = await prisma.pttTransportType.findUnique({ where: { id } });
-    if (!type) redirectWithToast("/admin/master-data", "error", "PTT transport type was not found.");
-    if (type.active) redirectWithToast("/admin/master-data", "error", "Deactivate the PTT transport type before permanently deleting it.");
+    if (!type) redirectWithToast(returnTo, "error", "PTT transport type was not found.");
+    if (type.active) redirectWithToast(returnTo, "error", "Deactivate the PTT transport type before permanently deleting it.");
     const usedCount = await prisma.pttApplicationRecord.count({
       where: { versionId: type.versionId, transportType: type.name }
     });
-    if (usedCount > 0) redirectWithToast("/admin/master-data", "error", "Cannot permanently delete a PTT transport type used by application records.");
+    if (usedCount > 0) redirectWithToast(returnTo, "error", "Cannot permanently delete a PTT transport type used by application records.");
     await prisma.pttTransportType.delete({ where: { id } });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not permanently delete the PTT transport type.");
+    redirectWithToast(returnTo, "error", "Could not permanently delete the PTT transport type.");
   }
 
   revalidatePttApplications();
-  redirectWithToast("/admin/master-data", "success", "PTT transport type permanently deleted.");
+  redirectWithToast(returnTo, "success", "PTT transport type permanently deleted.");
 }
 export async function restoreApplicationTypeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=deactivated");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "Application type id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "Application type id is required.");
 
   try {
     await prisma.applicationType.update({ where: { id }, data: { active: true } });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not restore the application type.");
+    redirectWithToast(returnTo, "error", "Could not restore the application type.");
   }
 
   revalidatePath("/admin/master-data");
   revalidatePath("/applications/new");
   revalidateReports();
-  redirectWithToast("/admin/master-data", "success", "Application type restored.");
+  redirectWithToast(returnTo, "success", "Application type restored.");
 }
 
 export async function hardDeleteApplicationTypeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=deactivated");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "Application type id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "Application type id is required.");
 
   try {
     const applicationType = await prisma.applicationType.findUnique({
       where: { id },
       include: { documents: { include: { progressDocuments: true } }, records: true }
     });
-    if (!applicationType) redirectWithToast("/admin/master-data", "error", "Application type was not found.");
-    if (applicationType.active) redirectWithToast("/admin/master-data", "error", "Deactivate the application type before permanently deleting it.");
-    if (applicationType.records.length > 0) redirectWithToast("/admin/master-data", "error", "Cannot permanently delete an application type that is used by application records.");
+    if (!applicationType) redirectWithToast(returnTo, "error", "Application type was not found.");
+    if (applicationType.active) redirectWithToast(returnTo, "error", "Deactivate the application type before permanently deleting it.");
+    if (applicationType.records.length > 0) redirectWithToast(returnTo, "error", "Cannot permanently delete an application type that is used by application records.");
     if (applicationType.documents.some((doc) => doc.progressDocuments.length > 0)) {
-      redirectWithToast("/admin/master-data", "error", "Cannot permanently delete an application type with document history.");
+      redirectWithToast(returnTo, "error", "Cannot permanently delete an application type with document history.");
     }
     await prisma.applicationType.delete({ where: { id } });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not permanently delete the application type.");
+    redirectWithToast(returnTo, "error", "Could not permanently delete the application type.");
   }
 
   revalidatePath("/admin/master-data");
   revalidatePath("/applications/new");
   revalidateReports();
-  redirectWithToast("/admin/master-data", "success", "Application type permanently deleted.");
+  redirectWithToast(returnTo, "success", "Application type permanently deleted.");
 }
 
 export async function restoreRequiredDocumentAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=deactivated");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "Document id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "Document id is required.");
 
   try {
     const document = await prisma.requiredDocument.findUnique({ where: { id }, include: { applicationType: true } });
-    if (!document) redirectWithToast("/admin/master-data", "error", "Required document was not found.");
-    if (!document.applicationType.active) redirectWithToast("/admin/master-data", "error", "Restore the application type before restoring this document.");
+    if (!document) redirectWithToast(returnTo, "error", "Required document was not found.");
+    if (!document.applicationType.active) redirectWithToast(returnTo, "error", "Restore the application type before restoring this document.");
     await prisma.requiredDocument.update({ where: { id }, data: { active: true } });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not restore the required document.");
+    redirectWithToast(returnTo, "error", "Could not restore the required document.");
   }
 
   revalidatePath("/admin/master-data");
   revalidatePath("/applications/new");
   revalidateReports();
-  redirectWithToast("/admin/master-data", "success", "Required document restored.");
+  redirectWithToast(returnTo, "success", "Required document restored.");
 }
 
 export async function hardDeleteRequiredDocumentAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=deactivated");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "Document id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "Document id is required.");
 
   try {
     const document = await prisma.requiredDocument.findUnique({ where: { id }, include: { progressDocuments: true } });
-    if (!document) redirectWithToast("/admin/master-data", "error", "Required document was not found.");
-    if (document.active) redirectWithToast("/admin/master-data", "error", "Deactivate the required document before permanently deleting it.");
-    if (document.progressDocuments.length > 0) redirectWithToast("/admin/master-data", "error", "Cannot permanently delete a required document with application history.");
+    if (!document) redirectWithToast(returnTo, "error", "Required document was not found.");
+    if (document.active) redirectWithToast(returnTo, "error", "Deactivate the required document before permanently deleting it.");
+    if (document.progressDocuments.length > 0) redirectWithToast(returnTo, "error", "Cannot permanently delete a required document with application history.");
     await prisma.requiredDocument.delete({ where: { id } });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not permanently delete the required document.");
+    redirectWithToast(returnTo, "error", "Could not permanently delete the required document.");
   }
 
   revalidatePath("/admin/master-data");
   revalidatePath("/applications/new");
   revalidateReports();
-  redirectWithToast("/admin/master-data", "success", "Required document permanently deleted.");
+  redirectWithToast(returnTo, "success", "Required document permanently deleted.");
 }
 
 export async function restoreRegionalOfficeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=deactivated");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "Regional office id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "Regional office id is required.");
 
   try {
     await prisma.regionalOffice.update({ where: { id }, data: { active: true } });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not restore the regional office.");
+    redirectWithToast(returnTo, "error", "Could not restore the regional office.");
   }
 
   revalidatePath("/admin/master-data");
-  redirectWithToast("/admin/master-data", "success", "Regional office restored.");
+  redirectWithToast(returnTo, "success", "Regional office restored.");
 }
 
 export async function hardDeleteRegionalOfficeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=deactivated");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "Regional office id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "Regional office id is required.");
 
   try {
     const office = await prisma.regionalOffice.findUnique({ where: { id } });
-    if (!office) redirectWithToast("/admin/master-data", "error", "Regional office was not found.");
-    if (office.active) redirectWithToast("/admin/master-data", "error", "Deactivate the regional office before permanently deleting it.");
+    if (!office) redirectWithToast(returnTo, "error", "Regional office was not found.");
+    if (office.active) redirectWithToast(returnTo, "error", "Deactivate the regional office before permanently deleting it.");
     await prisma.$transaction(async (tx) => {
       await tx.provincialOffice.deleteMany({ where: { regionalOfficeId: id } });
       await tx.regionalOffice.delete({ where: { id } });
     });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not permanently delete the regional office.");
+    redirectWithToast(returnTo, "error", "Could not permanently delete the regional office.");
   }
 
   revalidatePath("/admin/master-data");
-  redirectWithToast("/admin/master-data", "success", "Regional office permanently deleted.");
+  redirectWithToast(returnTo, "success", "Regional office permanently deleted.");
 }
 
 export async function restoreProvincialOfficeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=deactivated");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "Provincial office id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "Provincial office id is required.");
 
   try {
     const office = await prisma.provincialOffice.findUnique({ where: { id }, include: { regionalOffice: true } });
-    if (!office) redirectWithToast("/admin/master-data", "error", "Provincial office was not found.");
-    if (!office.regionalOffice.active) redirectWithToast("/admin/master-data", "error", "Restore the regional office before restoring this provincial office.");
+    if (!office) redirectWithToast(returnTo, "error", "Provincial office was not found.");
+    if (!office.regionalOffice.active) redirectWithToast(returnTo, "error", "Restore the regional office before restoring this provincial office.");
     await prisma.provincialOffice.update({ where: { id }, data: { active: true } });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not restore the provincial office.");
+    redirectWithToast(returnTo, "error", "Could not restore the provincial office.");
   }
 
   revalidatePath("/admin/master-data");
-  redirectWithToast("/admin/master-data", "success", "Provincial office restored.");
+  redirectWithToast(returnTo, "success", "Provincial office restored.");
 }
 
 export async function hardDeleteProvincialOfficeAction(formData: FormData) {
   await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=deactivated");
   const id = String(formData.get("id") || "");
-  if (!id) redirectWithToast("/admin/master-data", "error", "Provincial office id is required.");
+  if (!id) redirectWithToast(returnTo, "error", "Provincial office id is required.");
 
   try {
     const office = await prisma.provincialOffice.findUnique({ where: { id } });
-    if (!office) redirectWithToast("/admin/master-data", "error", "Provincial office was not found.");
-    if (office.active) redirectWithToast("/admin/master-data", "error", "Deactivate the provincial office before permanently deleting it.");
+    if (!office) redirectWithToast(returnTo, "error", "Provincial office was not found.");
+    if (office.active) redirectWithToast(returnTo, "error", "Deactivate the provincial office before permanently deleting it.");
     await prisma.provincialOffice.delete({ where: { id } });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    redirectWithToast("/admin/master-data", "error", "Could not permanently delete the provincial office.");
+    redirectWithToast(returnTo, "error", "Could not permanently delete the provincial office.");
   }
 
   revalidatePath("/admin/master-data");
-  redirectWithToast("/admin/master-data", "success", "Provincial office permanently deleted.");
+  redirectWithToast(returnTo, "success", "Provincial office permanently deleted.");
 }
 export async function importPtcRecordsAction(formData: FormData) {
   const user = await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=imports");
   const file = formData.get("file");
   const selectedVersionId = nullableVersionId(formData.get("versionId"));
-  if (!(file instanceof File)) redirectWithToast("/admin/master-data", "error", "Upload a PTC Excel file.");
+  if (!(file instanceof File)) redirectWithToast(returnTo, "error", "Upload a PTC Excel file.");
 
   const selectedVersion = selectedVersionId
     ? await prisma.ptcVersion.findFirst({ where: { id: selectedVersionId, group: PERMIT_GROUP_PTC, active: true } })
     : null;
-  if (selectedVersionId && !selectedVersion) redirectWithToast("/admin/master-data", "error", "Selected import Version was not found or is archived.");
+  if (selectedVersionId && !selectedVersion) redirectWithToast(returnTo, "error", "Selected import Version was not found or is archived.");
 
   let parsed;
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
+    const preview = checkPtcImportWorkbook(buffer, await ptcImportCheckContext(selectedVersionId));
+    if (preview.errorCount > 0) {
+      redirectWithToast(returnTo, "error", `Import checker found ${preview.errorCount} blocking error${preview.errorCount === 1 ? "" : "s"}. Fix the Excel file and check it again.`);
+    }
     parsed = parsePtcRecordsWorkbook(buffer);
-  } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not read the PTC Excel file.");
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    redirectWithToast(returnTo, "error", "Could not read the PTC Excel file.");
   }
 
-  if (parsed.length === 0) redirectWithToast("/admin/master-data", "error", "No PTC rows were found to import.");
+  if (parsed.length === 0) redirectWithToast(returnTo, "error", "No PTC rows were found to import.");
 
   const typeMap = new Map<string, string>();
   if (selectedVersionId) {
@@ -1938,14 +1996,14 @@ export async function importPtcRecordsAction(formData: FormData) {
   try {
     await prisma.applicationRecord.createMany({ data });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not import the PTC records.");
+    redirectWithToast(returnTo, "error", "Could not import the PTC records.");
   }
 
   revalidateReports();
   const assignedCount = selectedVersionId ? parsed.length : 0;
   const uncategorizedCount = selectedVersionId ? 0 : parsed.length;
   redirectWithToast(
-    `/admin/master-data?version=${selectedVersionId || UNCATEGORIZED_VERSION}`,
+    withVersionParam(returnTo, selectedVersionId || UNCATEGORIZED_VERSION),
     "success",
     `Imported ${parsed.length} PTC record${parsed.length === 1 ? "" : "s"}. Assigned: ${assignedCount}. Unmatched types: ${unmatchedTypeCount}. Uncategorized: ${uncategorizedCount}.`
   );
@@ -1953,25 +2011,31 @@ export async function importPtcRecordsAction(formData: FormData) {
 
 export async function importPttRecordsAction(formData: FormData) {
   const user = await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=imports");
   const file = formData.get("file");
   const selectedVersionId = nullableVersionId(formData.get("versionId"));
-  if (!(file instanceof File)) redirectWithToast("/admin/master-data", "error", "Upload a PTT Excel file.");
-  if (!selectedVersionId) redirectWithToast("/admin/master-data", "error", "Choose a PTT Version before importing PTT records.");
+  if (!(file instanceof File)) redirectWithToast(returnTo, "error", "Upload a PTT Excel file.");
+  if (!selectedVersionId) redirectWithToast(returnTo, "error", "Choose a PTT Version before importing PTT records.");
 
   const selectedVersion = await prisma.ptcVersion.findFirst({
     where: { id: selectedVersionId, group: PERMIT_GROUP_PTT, active: true }
   });
-  if (!selectedVersion) redirectWithToast("/admin/master-data", "error", "Selected PTT Version was not found or is archived.");
+  if (!selectedVersion) redirectWithToast(returnTo, "error", "Selected PTT Version was not found or is archived.");
 
   let parsed;
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
+    const preview = checkPttImportWorkbook(buffer, await pttImportCheckContext(selectedVersionId));
+    if (preview.errorCount > 0) {
+      redirectWithToast(returnTo, "error", `Import checker found ${preview.errorCount} blocking error${preview.errorCount === 1 ? "" : "s"}. Fix the Excel file and check it again.`);
+    }
     parsed = parsePttRecordsWorkbook(buffer);
-  } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not read the PTT Excel file.");
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    redirectWithToast(returnTo, "error", "Could not read the PTT Excel file.");
   }
 
-  if (parsed.length === 0) redirectWithToast("/admin/master-data", "error", "No PTT rows were found to import.");
+  if (parsed.length === 0) redirectWithToast(returnTo, "error", "No PTT rows were found to import.");
 
   const data = parsed.map((record) => ({
     group: PERMIT_GROUP_PTT,
@@ -2012,12 +2076,12 @@ export async function importPttRecordsAction(formData: FormData) {
   try {
     await prisma.pttApplicationRecord.createMany({ data });
   } catch {
-    redirectWithToast("/admin/master-data", "error", "Could not import the PTT records.");
+    redirectWithToast(returnTo, "error", "Could not import the PTT records.");
   }
 
   revalidatePttApplications();
   redirectWithToast(
-    "/admin/master-data",
+    returnTo,
     "success",
     "Imported " + parsed.length + " PTT record" + (parsed.length === 1 ? "" : "s") + " into " + selectedVersion.name + ". Duplicate PTT Numbers are allowed and will be flagged in the PTT table."
   );

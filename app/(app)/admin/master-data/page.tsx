@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   clonePtcVersionAction,
   createApplicationTypeAction,
@@ -40,6 +41,7 @@ import {
 } from "@/app/actions";
 import { ConfirmDeleteForm } from "@/components/confirm-delete-form";
 import { ExportExcelButton } from "@/components/export-excel-button";
+import { ImportCheckerPanel } from "@/components/import-checker-panel";
 import { PtcCalculationRulesManager } from "@/components/ptc-calculation-rules-manager";
 import { SubmitButton } from "@/components/submit-button";
 import { VersionFilter } from "@/components/version-filter";
@@ -50,6 +52,33 @@ import { prisma } from "@/lib/prisma";
 import { ruleConfig } from "@/lib/ptc-calculation-rules";
 import { Role } from "@prisma/client";
 
+type MasterDataTab = "general" | "ptc" | "ptt" | "imports" | "deactivated";
+
+const MASTER_DATA_TABS: { id: MasterDataTab; label: string; description: string }[] = [
+  { id: "general", label: "General", description: "Regional and provincial offices" },
+  { id: "ptc", label: "PTC", description: "Versions, application types, documents, and rules" },
+  { id: "ptt", label: "PTT", description: "Versions and transport types" },
+  { id: "imports", label: "Imports / Exports", description: "Excel tools and filters" },
+  { id: "deactivated", label: "Deactivated Data", description: "Restore or permanently delete" }
+];
+
+function activeMasterDataTab(value?: string): MasterDataTab {
+  return MASTER_DATA_TABS.some((tab) => tab.id === value) ? value as MasterDataTab : "general";
+}
+
+function masterDataHref(tab: MasterDataTab, version?: string) {
+  const params = new URLSearchParams({ tab });
+  if (version && (tab === "ptc" || tab === "imports")) params.set("version", version);
+  return `/admin/master-data?${params.toString()}`;
+}
+
+function returnField(returnTo: string) {
+  return <input type="hidden" name="returnTo" value={returnTo} />;
+}
+
+function fieldsWithReturn(fields: { name: string; value: string }[], returnTo: string) {
+  return [...fields, { name: "returnTo", value: returnTo }];
+}
 function requirementBadge(requirementMode: string) {
   if (requirementMode === "Optional") return <span className="badge neutral">Optional</span>;
   if (requirementMode === "LocConditional") return <span className="badge neutral">LOC Conditional</span>;
@@ -65,43 +94,75 @@ function RequirementModeSelect({ defaultValue = "Required", disabled = false }: 
     </select>
   );
 }
-export default async function MasterDataPage({ searchParams }: { searchParams?: { version?: string } }) {
+export default async function MasterDataPage({ searchParams }: { searchParams?: { version?: string; tab?: string } }) {
   const user = await requireAdmin();
+  const activeTab = activeMasterDataTab(searchParams?.tab);
   const versionContext = await getVersionContext(searchParams?.version);
   const pttVersionContext = await getVersionContext(null, PERMIT_GROUP_PTT);
   const selectedVersionId = versionContext.selectedVersionId;
-  const [applicationTypes, officeChoices, deactivated, calculationRules] = await Promise.all([
-    getApplicationTypesWithDocuments({ versionId: selectedVersionId }),
-    getOfficeChoices(),
-    getDeactivatedMasterData(),
-    user.role === Role.SUPERADMIN && selectedVersionId
+  const emptyDeactivated = {
+    versions: [],
+    applicationTypes: [],
+    requiredDocuments: [],
+    regionalOffices: [],
+    provincialOffices: [],
+    pttVersions: [],
+    pttTransportTypes: []
+  };
+  const [applicationTypes, officeChoices, deactivated, calculationRules, pttTransportTypes] = await Promise.all([
+    activeTab === "ptc" ? getApplicationTypesWithDocuments({ versionId: selectedVersionId }) : Promise.resolve([]),
+    activeTab === "general" || activeTab === "imports" ? getOfficeChoices() : Promise.resolve([]),
+    activeTab === "deactivated" ? getDeactivatedMasterData() : Promise.resolve(emptyDeactivated),
+    activeTab === "ptc" && user.role === Role.SUPERADMIN && selectedVersionId
       ? prisma.ptcCalculationRule.findMany({ where: { versionId: selectedVersionId }, orderBy: { applicationTypeId: "asc" } })
-      : Promise.resolve([])
+      : Promise.resolve([]),
+    activeTab === "ptt" ? getPttTransportTypes(true) : Promise.resolve([])
   ]);
-  const pttTransportTypes = await getPttTransportTypes(true);
   const deactivatedCount =
     deactivated.versions.length +
     deactivated.applicationTypes.length +
     deactivated.requiredDocuments.length +
     deactivated.regionalOffices.length +
-    deactivated.provincialOffices.length;
+    deactivated.provincialOffices.length +
+    deactivated.pttVersions.length +
+    deactivated.pttTransportTypes.length;
+  const returnToGeneral = masterDataHref("general");
+  const returnToPtc = masterDataHref("ptc", versionContext.selectedVersionParam);
+  const returnToPtt = masterDataHref("ptt");
+  const returnToImports = masterDataHref("imports", versionContext.selectedVersionParam);
+  const returnToDeactivated = masterDataHref("deactivated");
 
   return (
     <div className="grid">
-      <div className="topbar">
+      <div className="topbar master-data-topbar">
         <div>
           <h1>Master Data</h1>
           <p className="muted">Manage PTC, PTT, shared offices, imports, and regional exports from one control center.</p>
         </div>
-        <div className="actions">
-          <VersionFilter path="/admin/master-data" selected={versionContext.selectedVersionParam} options={versionContext.options} />
-        </div>
       </div>
 
-      <div className="master-data-group-title"><h2>PTC Master Data</h2><p className="muted">Manage PTC versions, application types, and document requirements.</p></div>
+      <nav className="master-data-tabs" aria-label="Master Data sections">
+        {MASTER_DATA_TABS.map((tab) => (
+          <Link
+            key={tab.id}
+            className={`master-data-tab ${activeTab === tab.id ? "active" : ""}`}
+            href={masterDataHref(tab.id, searchParams?.version)}
+            aria-current={activeTab === tab.id ? "page" : undefined}
+          >
+            <span>{tab.label}</span>
+            <small>{tab.description}</small>
+          </Link>
+        ))}
+      </nav>
+
+      {activeTab === "ptc" ? (
+        <>
+          <div className="master-data-group-title"><h2>PTC Master Data</h2><p className="muted">Manage PTC versions, application types, and document requirements.</p></div>
+          <div className="actions"><VersionFilter path="/admin/master-data" selected={versionContext.selectedVersionParam} options={versionContext.options} preservedParams={{ tab: "ptc" }} /></div>
 
       <section className="grid cols-2">
         <form action={createPtcVersionAction} className="panel form">
+          {returnField(returnToPtc)}
           <h2>Add Version</h2>
           <div className="field">
             <label htmlFor="versionName">Version</label>
@@ -115,6 +176,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
         </form>
 
         <form action={clonePtcVersionAction} className="panel form">
+          {returnField(returnToPtc)}
           <h2>Clone Version</h2>
           <div className="field">
             <label htmlFor="sourceVersionId">Source Version</label>
@@ -139,6 +201,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
           {selectedVersionId ? (
             <>
               <form action={updatePtcVersionAction} className="form compact-form">
+          {returnField(returnToPtc)}
                 <input type="hidden" name="id" value={selectedVersionId} />
                 <div className="field">
                   <label htmlFor="selectedVersionName">Version</label>
@@ -169,7 +232,12 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
         </section>
       </section>
 
-      <div className="master-data-group-title"><h2>PTT Master Data</h2><p className="muted">Manage PTT versions and transport type choices.</p></div>
+        </>
+      ) : null}
+
+      {activeTab === "ptt" ? (
+        <>
+          <div className="master-data-group-title"><h2>PTT Master Data</h2><p className="muted">Manage PTT versions and transport type choices.</p></div>
 
       <section className="panel table-wrap">
         <div className="section-heading-row">
@@ -179,6 +247,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
           </div>
         </div>
         <form action={createPttVersionAction} className="inline-edit-form">
+          {returnField(returnToPtt)}
           <input name="name" placeholder="PTT Version name" required />
           <input name="description" placeholder="Optional notes" />
           <SubmitButton pendingText="Adding PTT Version...">Add PTT Version</SubmitButton>
@@ -190,6 +259,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
               <tr key={version.id}>
                 <td>
                   <form action={updatePttVersionAction} className="inline-edit-form">
+          {returnField(returnToPtt)}
                     <input type="hidden" name="id" value={version.id} />
                     <input name="name" defaultValue={version.name} required />
                     <input name="description" defaultValue={version.description || ""} placeholder="Optional notes" />
@@ -232,6 +302,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
           </div>
         </div>
         <form action={createPttTransportTypeAction} className="inline-edit-form">
+          {returnField(returnToPtt)}
           <select name="versionId" required>
             <option value="">Choose PTT Version</option>
             {pttVersionContext.activeVersions.map((version) => <option key={version.id} value={version.id}>{version.name}</option>)}
@@ -247,6 +318,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
                 <td>{type.version.name}{type.version.active ? "" : " (Archived Version)"}</td>
                 <td>
                   <form action={updatePttTransportTypeAction} className="inline-edit-form">
+          {returnField(returnToPtt)}
                     <input type="hidden" name="id" value={type.id} />
                     <select name="versionId" defaultValue={type.versionId} required>
                       {pttVersionContext.versions.map((version) => <option key={version.id} value={version.id}>{version.name}{version.active ? "" : " (Archived)"}</option>)}
@@ -282,7 +354,12 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
         </table>
       </section>
 
-      <div className="master-data-group-title"><h2>PTC Application Types and Documents</h2><p className="muted">Manage active PTC choices for the selected Version.</p></div>
+        </>
+      ) : null}
+
+      {activeTab === "ptc" ? (
+        <>
+          <div className="master-data-group-title"><h2>PTC Application Types and Documents</h2><p className="muted">Manage active PTC choices for the selected Version.</p></div>
 
       {user.role === Role.SUPERADMIN && selectedVersionId ? <PtcCalculationRulesManager
         versionId={selectedVersionId}
@@ -293,6 +370,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
 
       <section className="grid cols-2">
         <form action={createApplicationTypeAction} className="panel form">
+          {returnField(returnToPtc)}
           <h2>Add Application Type</h2>
           <input type="hidden" name="versionId" value={selectedVersionId || ""} />
           <div className="field">
@@ -303,6 +381,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
         </form>
 
         <form action={createRequiredDocumentAction} className="panel form">
+          {returnField(returnToPtc)}
           <h2>Add Required Document</h2>
           <div className="field">
             <label htmlFor="applicationTypeId">Type of application</label>
@@ -333,6 +412,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
               <tr key={type.id}>
                 <td>
                   <form action={updateApplicationTypeAction} className="inline-edit-form">
+          {returnField(returnToPtc)}
                     <input type="hidden" name="id" value={type.id} />
                     <input name="name" defaultValue={type.name} required />
                     <SubmitButton className="button secondary" pendingText="Saving...">Save</SubmitButton>
@@ -343,6 +423,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
                     {type.documents.map((doc) => (
                       <div key={doc.id} className="inline-row">
                         <form action={updateRequiredDocumentAction} className="inline-edit-form">
+          {returnField(returnToPtc)}
                           <input type="hidden" name="id" value={doc.id} />
                           <input name="name" defaultValue={doc.name} required />
                           <RequirementModeSelect defaultValue={doc.requirementMode} />
@@ -379,10 +460,16 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
         </table>
       </section>
 
-      <div className="master-data-group-title"><h2>Shared Master Data</h2><p className="muted">Regional and provincial offices are reused by both PTC and PTT records.</p></div>
+        </>
+      ) : null}
+
+      {activeTab === "general" ? (
+        <>
+          <div className="master-data-group-title"><h2>General</h2><p className="muted">Regional and provincial offices are reused by both PTC and PTT records.</p></div>
 
       <section className="grid cols-2">
         <form action={createRegionalOfficeAction} className="panel form">
+          {returnField(returnToGeneral)}
           <h2>Add Regional Office</h2>
           <div className="field">
             <label htmlFor="regionalOfficeName">Regional Office</label>
@@ -392,6 +479,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
         </form>
 
         <form action={createProvincialOfficeAction} className="panel form">
+          {returnField(returnToGeneral)}
           <h2>Add Provincial Office</h2>
           <div className="field">
             <label htmlFor="regionalOfficeId">Regional Office</label>
@@ -417,6 +505,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
               <tr key={office.id}>
                 <td>
                   <form action={updateRegionalOfficeAction} className="inline-edit-form">
+          {returnField(returnToGeneral)}
                     <input type="hidden" name="id" value={office.id} />
                     <input name="name" defaultValue={office.name} required />
                     <SubmitButton className="button secondary" pendingText="Saving...">Save</SubmitButton>
@@ -427,6 +516,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
                     {office.provincialOffices.map((provincial) => (
                       <div key={provincial.id} className="inline-row">
                         <form action={updateProvincialOfficeAction} className="inline-edit-form">
+          {returnField(returnToGeneral)}
                           <input type="hidden" name="id" value={provincial.id} />
                           <select name="regionalOfficeId" defaultValue={office.id} required>
                             {officeChoices.map((region) => <option key={region.id} value={region.id}>{region.name}</option>)}
@@ -463,9 +553,13 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
           </tbody>
         </table>
       </section>
+        </>
+      ) : null}
 
-      <section className="panel table-wrap">
-        <h2>Deactivated Data</h2>
+      {activeTab === "deactivated" ? (
+        <>
+          <div className="master-data-group-title"><h2>Deactivated Data</h2><p className="muted">Restore inactive choices or permanently delete unused inactive master data.</p></div>
+          <section className="panel table-wrap">
         <table>
           <thead><tr><th>Category</th><th>Name</th><th>Parent / Belongs To</th><th>Actions</th></tr></thead>
           <tbody>
@@ -482,7 +576,32 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
                 </td>
               </tr>
             ))}
-            {deactivated.applicationTypes.map((type) => (
+            {deactivated.pttVersions.map((version) => (
+              <tr key={`ptt-version-${version.id}`}>
+                <td>PTT Version</td>
+                <td>{version.name}</td>
+                <td>{version.description || "PTT"}</td>
+                <td>
+                  <div className="actions">
+                    <ConfirmDeleteForm action={restorePttVersionAction} fields={fieldsWithReturn([{ name: "id", value: version.id }], returnToDeactivated)} triggerText="Restore" pendingText="Restoring..." title="Restore PTT Version" message={`Restore "${version.name}" to active PTT Versions?`} confirmText="Restore" triggerClassName="button secondary" submitClassName="button" />
+                    <ConfirmDeleteForm action={hardDeletePttVersionAction} fields={fieldsWithReturn([{ name: "id", value: version.id }], returnToDeactivated)} triggerText="Delete Permanently" pendingText="Deleting permanently..." title="Permanently Delete PTT Version" message={`Permanently delete "${version.name}"? This is allowed only when no PTT application records use it.`} confirmText="Delete Permanently" />
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {deactivated.pttTransportTypes.map((type) => (
+              <tr key={`ptt-transport-type-${type.id}`}>
+                <td>PTT Type of Transport</td>
+                <td>{type.name}</td>
+                <td>{type.version.name}{type.version.active ? "" : " (PTT Version inactive)"}</td>
+                <td>
+                  <div className="actions">
+                    <ConfirmDeleteForm action={restorePttTransportTypeAction} fields={fieldsWithReturn([{ name: "id", value: type.id }], returnToDeactivated)} triggerText="Restore" pendingText="Restoring..." title="Restore PTT Transport Type" message={`Restore "${type.name}" to active transport choices?`} confirmText="Restore" triggerClassName="button secondary" submitClassName="button" />
+                    <ConfirmDeleteForm action={hardDeletePttTransportTypeAction} fields={fieldsWithReturn([{ name: "id", value: type.id }], returnToDeactivated)} triggerText="Delete Permanently" pendingText="Deleting permanently..." title="Permanently Delete PTT Transport Type" message={`Permanently delete "${type.name}"? This is allowed only when no PTT application records in the same Version use it.`} confirmText="Delete Permanently" />
+                  </div>
+                </td>
+              </tr>
+            ))}            {deactivated.applicationTypes.map((type) => (
               <tr key={`application-type-${type.id}`}>
                 <td>Type of Application</td>
                 <td>{type.name}</td>
@@ -529,65 +648,66 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
         </table>
       </section>
 
-      <div className="master-data-group-title"><h2>Imports and Exports</h2><p className="muted">Import records and export Excel workbooks by Version and Region.</p></div>
+        </>
+      ) : null}
+
+      {activeTab === "imports" ? (
+        <>
+          <div className="master-data-group-title"><h2>Imports and Exports</h2><p className="muted">Import records and export Excel workbooks by Version, Region, and Provincial Office.</p></div>
 
       <section className="grid cols-2">
-        <form action={importPtcRecordsAction} className="panel form">
-          <h2>Import PTC Excel File</h2>
-          <div className="instruction-box">
-            <p><strong>Expected first-sheet column order:</strong></p>
-            <ol>
-              <li>Regional Office</li><li>Provincial Office</li><li>PTC Number</li><li>Date Issued</li><li>Name of Applicant</li><li>Barangay</li><li>Municipality</li><li>No. of trees applied</li><li>No. of trees approved</li><li>No. of Seedlings Replacement</li><li>Type of Application (optional)</li><li>LOC Exemption (optional: Owner or Others)</li>
-            </ol>
-            <p className="muted">Rows import into the selected Version. If optional Type of Application and LOC Exemption columns are present, the type is matched only inside that Version and LOC Exemption accepts Owner or Others.</p>
-          </div>
-          <div className="field">
-            <label htmlFor="importVersionId">Import Version</label>
-            <select id="importVersionId" name="versionId" defaultValue="uncategorized">
-              <option value="uncategorized">Uncategorized</option>
-              {versionContext.activeVersions.map((version) => <option key={version.id} value={version.id}>{version.name}</option>)}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="ptcFile">PTC Excel file</label>
-            <input id="ptcFile" name="file" type="file" accept=".xlsx,.xls" required />
-          </div>
-          <SubmitButton pendingText="Importing PTC records...">Import PTC Excel File</SubmitButton>
-        </form>
+        <ImportCheckerPanel
+          group="PTC"
+          title="Import PTC Excel File"
+          description="Check Permit-to-Cut rows before importing them into the selected Version."
+          action={importPtcRecordsAction}
+          returnTo={returnToImports}
+          versionLabel="Import Version"
+          versionOptions={[{ id: "uncategorized", name: "Uncategorized" }, ...versionContext.activeVersions.map((version) => ({ id: version.id, name: version.name }))]}
+          defaultVersionId="uncategorized"
+          fileInputId="ptcFile"
+          fileLabel="PTC Excel file"
+          templateHref="/api/import-template?group=PTC"
+          importButtonText="Import PTC Excel File"
+          importingText="Importing PTC records..."
+          instruction={(
+            <>
+              <p><strong>Template columns:</strong></p>
+              <p className="muted">Regional Office, Provincial Office, PTC Number, Date Issued, Name of Applicant, location details, tree counts, Type of Application, and LOC Exemption.</p>
+              <p className="muted">Download the template for exact column order. Rows import only after this checker finds no blocking errors; warnings stay visible for review.</p>
+            </>
+          )}
+        />
 
-        <form action={importPttRecordsAction} className="panel form">
-          <div className="section-heading-row">
-            <div>
-              <h2>Import PTT Excel File</h2>
-              <p className="muted">Import Permit-to-Transport records into the selected PTT Version.</p>
-            </div>
-            <a className="button secondary" href="/api/import-template?group=PTT">Download Template</a>
-          </div>
-          <div className="instruction-box">
-            <p><strong>Template columns:</strong></p>
-            <p className="muted">Regional Office, Provincial Office, PTT Number, Date Issued, Name, transport details, fees, validity, issuing details, and Remarks.</p>
-            <p className="muted">Dates may be Excel dates or readable date strings. Yes/No and True/False are accepted for Certificate of Quantity/Volume Attached.</p>
-          </div>
-          <div className="field">
-            <label htmlFor="pttImportVersionId">Import PTT Version</label>
-            <select id="pttImportVersionId" name="versionId" required>
-              <option value="">Choose PTT Version</option>
-              {pttVersionContext.activeVersions.map((version) => <option key={version.id} value={version.id}>{version.name}</option>)}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="pttFile">PTT Excel file</label>
-            <input id="pttFile" name="file" type="file" accept=".xlsx,.xls" required />
-          </div>
-          <SubmitButton pendingText="Importing PTT records...">Import PTT Excel File</SubmitButton>
-        </form>
+        <ImportCheckerPanel
+          group="PTT"
+          title="Import PTT Excel File"
+          description="Check Permit-to-Transport rows before importing them into the selected PTT Version."
+          action={importPttRecordsAction}
+          returnTo={returnToImports}
+          versionLabel="Import PTT Version"
+          versionOptions={[{ id: "", name: "Choose PTT Version" }, ...pttVersionContext.activeVersions.map((version) => ({ id: version.id, name: version.name }))]}
+          defaultVersionId=""
+          fileInputId="pttFile"
+          fileLabel="PTT Excel file"
+          templateHref="/api/import-template?group=PTT"
+          importButtonText="Import PTT Excel File"
+          importingText="Importing PTT records..."
+          instruction={(
+            <>
+              <p><strong>Template columns:</strong></p>
+              <p className="muted">Regional Office, Provincial Office, PTT Number, Date Issued, Name, transport details, fees, validity, issuing details, and Remarks.</p>
+              <p className="muted">Dates may be Excel dates or readable date strings. Yes/No and True/False are accepted for Certificate of Quantity/Volume Attached.</p>
+            </>
+          )}
+        />
       </section>
-
       <section className="grid cols-2">
         <section className="panel form">
           <h2>Export PTC Records</h2>
           <p className="muted">Exports the selected PTC Version. Region and Provincial Office filtering apply to all workbook sheets.</p>
-          <ExportExcelButton versionId={versionContext.selectedVersionParam} officeChoices={officeChoices} label="Export PTC Excel" />
+          <VersionFilter path="/admin/master-data" selected={versionContext.selectedVersionParam} options={versionContext.options} preservedParams={{ tab: "imports" }} />
+          <ExportExcelButton versionId={versionContext.selectedVersionParam} versionName={versionContext.selectedVersionName} officeChoices={officeChoices} label="Export PTC Excel" />
         </section>
 
         <section className="panel form">
@@ -597,9 +717,11 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
             <label>PTT Version</label>
             <span className="muted">{pttVersionContext.selectedVersionName}</span>
           </div>
-          <ExportExcelButton group="PTT" versionId={pttVersionContext.selectedVersionParam} officeChoices={officeChoices} label="Export PTT Excel" filename="ptt-applications.xlsx" />
+          <ExportExcelButton group="PTT" versionId={pttVersionContext.selectedVersionParam} versionName={pttVersionContext.selectedVersionName} officeChoices={officeChoices} label="Export PTT Excel" />
         </section>
       </section>
+        </>
+      ) : null}
     </div>
   );
 }

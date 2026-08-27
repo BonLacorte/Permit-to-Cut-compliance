@@ -75,7 +75,7 @@ export async function getApplicationTypesWithDocuments(options: VersionScopedOpt
 }
 
 export async function getDeactivatedMasterData(group = PERMIT_GROUP_PTC) {
-  const [versions, applicationTypes, requiredDocuments, regionalOffices, provincialOffices] = await Promise.all([
+  const [versions, applicationTypes, requiredDocuments, regionalOffices, provincialOffices, pttVersions, pttTransportTypes] = await Promise.all([
     prisma.ptcVersion.findMany({
       where: { group, active: false },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
@@ -98,6 +98,15 @@ export async function getDeactivatedMasterData(group = PERMIT_GROUP_PTC) {
       where: { active: false, regionalOffice: { group } },
       include: { regionalOffice: true },
       orderBy: [{ regionalOffice: { sortOrder: "asc" } }, { sortOrder: "asc" }, { name: "asc" }]
+    }),
+    prisma.ptcVersion.findMany({
+      where: { group: PERMIT_GROUP_PTT, active: false },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+    }),
+    prisma.pttTransportType.findMany({
+      where: { group: PERMIT_GROUP_PTT, active: false },
+      include: { version: true },
+      orderBy: [{ version: { sortOrder: "asc" } }, { sortOrder: "asc" }, { name: "asc" }]
     })
   ]);
 
@@ -106,7 +115,9 @@ export async function getDeactivatedMasterData(group = PERMIT_GROUP_PTC) {
     applicationTypes,
     requiredDocuments,
     regionalOffices,
-    provincialOffices
+    provincialOffices,
+    pttVersions,
+    pttTransportTypes
   };
 }
 

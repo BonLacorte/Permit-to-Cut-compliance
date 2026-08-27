@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import * as XLSX from "xlsx";
 import { filterDashboardAuditsByProvincialOffice, filterDashboardAuditsByRegion } from "@/lib/dashboard";
 import { feesMatchDisplay, formatSignedFeeDifference } from "@/lib/ptc";
+import { buildReportWorkbook } from "@/lib/excel";
 import {
   auditRecord,
   applicationSummary,
@@ -8,6 +10,7 @@ import {
   documentCombinations,
   documentSummary,
   documentCoverage,
+  documentCoverageExportRows,
   applicationExportRows,
   type RecordRef,
   type RequiredDocumentRef
@@ -266,6 +269,74 @@ describe("reporting logic", () => {
       totalRecords: 1,
       withDocumentCount: 1,
       withoutDocumentCount: 0
+    });
+  });
+
+  it("exports document coverage rows by version, region, provincial office, type, and document", () => {
+    const documents: RequiredDocumentRef[] = [
+      ...requiredDocuments,
+      { id: "a3", name: "Optional A3", versionId, applicationTypeId: "appA", applicationTypeName: "Type A", requirementMode: "Optional" }
+    ];
+    const audits = [
+      auditRecord({ id: "r25", versionId, versionName: "New Forms", applicantName: "Person Y", applicationTypeId: "appA", applicationTypeName: "Type A", selectedDocumentIds: ["a1", "a3"], regionalOffice: "Region XIII", provincialOffice: "Agusan del Norte", ptcNumber: "PTC-1" }, documents),
+      auditRecord({ id: "r26", versionId, versionName: "New Forms", applicantName: "Person Z", applicationTypeId: "appA", applicationTypeName: "Type A", selectedDocumentIds: ["a1"], regionalOffice: "Region XIII", provincialOffice: "Agusan del Norte", ptcNumber: "PTC-2" }, documents),
+      auditRecord({ id: "r27", versionId, versionName: "New Forms", applicantName: "Person AA", applicationTypeId: "appA", applicationTypeName: "Type A", selectedDocumentIds: [], regionalOffice: "Region XIII", provincialOffice: "Agusan del Norte", ptcNumber: "" }, documents),
+      auditRecord({ id: "r28", versionId, versionName: "New Forms", applicantName: "Person AB", applicationTypeId: "appA", applicationTypeName: "Type A", selectedDocumentIds: ["a1"], regionalOffice: "Region IV-A", provincialOffice: "Quezon I", ptcNumber: "PTC-4" }, documents)
+    ];
+
+    const filtered = filterDashboardAuditsByProvincialOffice(filterDashboardAuditsByRegion(audits, "Region XIII"), "Agusan del Norte");
+    const coverageRows = documentCoverageExportRows(filtered, documents);
+    expect(coverageRows.find((row) => row.Document === "Document A1")).toMatchObject({
+      Version: "New Forms",
+      "Regional Office": "Region XIII",
+      "Provincial Office": "Agusan del Norte",
+      "Type of Application": "Type A",
+      Requirement: "Required",
+      "Total PTCs": 3,
+      "With Document": 2,
+      "PTC Numbers With Document": "PTC-1, PTC-2",
+      "Without Document": 1,
+      "PTC Numbers Without Document": "Blank",
+      "Coverage Rate": 2 / 3
+    });
+    expect(coverageRows.find((row) => row.Document === "Optional A3")).toMatchObject({
+      Requirement: "Optional",
+      "Total PTCs": 3,
+      "With Document": 1,
+      "Without Document": 2
+    });
+  });
+
+  it("adds a Document Coverage sheet to the PTC export workbook", () => {
+    const documents: RequiredDocumentRef[] = [
+      ...requiredDocuments,
+      { id: "a3", name: "Optional A3", versionId, applicationTypeId: "appA", applicationTypeName: "Type A", requirementMode: "Optional" }
+    ];
+    const audits = [
+      auditRecord({ id: "r29", versionId, versionName: "New Forms", applicantName: "Person AC", applicationTypeId: "appA", applicationTypeName: "Type A", selectedDocumentIds: ["a1", "a3"], regionalOffice: "Region XIII", provincialOffice: "Agusan del Norte", ptcNumber: "PTC-5" }, documents),
+      auditRecord({ id: "r30", versionId, versionName: "New Forms", applicantName: "Person AD", applicationTypeId: "appA", applicationTypeName: "Type A", selectedDocumentIds: [], regionalOffice: "Region XIII", provincialOffice: "Agusan del Norte", ptcNumber: "PTC-6" }, documents)
+    ];
+
+    const workbook = XLSX.read(buildReportWorkbook(audits, documents), { type: "buffer" });
+    expect(workbook.SheetNames).toEqual(["Dashboard", "Applications", "Document Summary", "Document Coverage", "Application Summary", "Missing Documents", "Document Combinations"]);
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets["Document Coverage"]);
+    expect(Object.keys(rows[0])).toEqual([
+      "Version",
+      "Regional Office",
+      "Provincial Office",
+      "Type of Application",
+      "Document",
+      "Requirement",
+      "Total PTCs",
+      "With Document",
+      "PTC Numbers With Document",
+      "Without Document",
+      "PTC Numbers Without Document",
+      "Coverage Rate"
+    ]);
+    expect(rows.find((row) => row.Document === "Optional A3")).toMatchObject({
+      "PTC Numbers With Document": "PTC-5",
+      "PTC Numbers Without Document": "PTC-6"
     });
   });
   it("marks a record pending when no Version is assigned", () => {

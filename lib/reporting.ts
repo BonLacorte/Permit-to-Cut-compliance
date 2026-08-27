@@ -228,6 +228,63 @@ export function documentCoverage(audits: RecordAudit[], requiredDocuments: Requi
     };
   });
 }
+
+function requirementLabel(mode: DocumentRequirementMode) {
+  if (mode === "LocConditional") return "LOC Conditional";
+  return mode;
+}
+
+function coveragePtcNumbers(audits: RecordAudit[]) {
+  return audits.map((audit) => audit.ptcNumber || "Blank").join(", ");
+}
+
+export function documentCoverageExportRows(audits: RecordAudit[], requiredDocuments: RequiredDocumentRef[]) {
+  const groups = new Map<string, RecordAudit[]>();
+  for (const audit of audits) {
+    if (!audit.versionId || !audit.applicationTypeId) continue;
+    const key = [
+      audit.versionName || "Uncategorized",
+      displayPtcField(audit, "regionalOffice"),
+      displayPtcField(audit, "provincialOffice"),
+      audit.applicationTypeId
+    ].join("::");
+    const group = groups.get(key) || [];
+    group.push(audit);
+    groups.set(key, group);
+  }
+
+  const rows: Array<Record<string, string | number>> = [];
+  for (const groupedAudits of groups.values()) {
+    const sample = groupedAudits[0];
+    const documents = requiredDocuments.filter((doc) => doc.versionId === sample.versionId && doc.applicationTypeId === sample.applicationTypeId);
+    for (const document of documents) {
+      const withDocument = groupedAudits.filter((audit) => audit.selectedDocumentIds.includes(document.id));
+      const withoutDocument = groupedAudits.filter((audit) => !audit.selectedDocumentIds.includes(document.id));
+      rows.push({
+        Version: sample.versionName || "Uncategorized",
+        "Regional Office": displayPtcField(sample, "regionalOffice"),
+        "Provincial Office": displayPtcField(sample, "provincialOffice"),
+        "Type of Application": sample.applicationTypeName,
+        Document: document.name,
+        Requirement: requirementLabel(requirementMode(document)),
+        "Total PTCs": groupedAudits.length,
+        "With Document": withDocument.length,
+        "PTC Numbers With Document": coveragePtcNumbers(withDocument),
+        "Without Document": withoutDocument.length,
+        "PTC Numbers Without Document": coveragePtcNumbers(withoutDocument),
+        "Coverage Rate": groupedAudits.length === 0 ? 0 : withDocument.length / groupedAudits.length
+      });
+    }
+  }
+
+  return rows.sort((a, b) =>
+    String(a.Version).localeCompare(String(b.Version)) ||
+    String(a["Regional Office"]).localeCompare(String(b["Regional Office"])) ||
+    String(a["Provincial Office"]).localeCompare(String(b["Provincial Office"])) ||
+    String(a["Type of Application"]).localeCompare(String(b["Type of Application"])) ||
+    String(a.Document).localeCompare(String(b.Document))
+  );
+}
 export function documentCombinations(audits: RecordAudit[]) {
   const counts = new Map<string, { applicationTypeName: string; combination: string; documents: string[]; size: number; count: number; appTotal: number }>();
   const totals = new Map<string, number>();

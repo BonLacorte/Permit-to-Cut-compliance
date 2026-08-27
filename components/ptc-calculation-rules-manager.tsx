@@ -7,11 +7,12 @@ import { DEFAULT_PTC_CALCULATION_CONFIG, type PtcCalculationConfig } from "@/lib
 
 type Rule = { applicationTypeId: string | null; config: PtcCalculationConfig };
 
-export function PtcCalculationRulesManager({ versionId, versionName, applicationTypes, rules }: {
+export function PtcCalculationRulesManager({ versionId, versionName, applicationTypes, rules, returnTo }: {
   versionId: string;
   versionName: string;
   applicationTypes: { id: string; name: string }[];
   rules: Rule[];
+  returnTo?: string;
 }) {
   const [applicationTypeId, setApplicationTypeId] = useState("");
   const baseRule = rules.find((rule) => rule.applicationTypeId === null)?.config || DEFAULT_PTC_CALCULATION_CONFIG;
@@ -29,6 +30,7 @@ export function PtcCalculationRulesManager({ versionId, versionName, application
     <div className="section-heading-row"><div><h2>PTC Calculation Rules</h2><p className="muted">Configure the baseline for {versionName}, or select a Type of Application to save an override.</p></div></div>
     <form action={savePtcCalculationRuleAction} className="form" key={applicationTypeId || "version-default"}>
       <input type="hidden" name="versionId" value={versionId} />
+      {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
       <div className="field">
         <label htmlFor="calculationApplicationType">Rule scope</label>
         <select id="calculationApplicationType" name="applicationTypeId" value={applicationTypeId} onChange={(event) => setApplicationTypeId(event.target.value)}>
@@ -59,6 +61,7 @@ export function PtcCalculationRulesManager({ versionId, versionName, application
       </div>
       <div className="actions"><SubmitButton pendingText="Saving rules...">Save Rules</SubmitButton></div>
     </form>
-    {applicationTypeId && hasOverride ? <form action={resetPtcApplicationTypeRuleAction} className="actions"><input type="hidden" name="versionId" value={versionId} /><input type="hidden" name="applicationTypeId" value={applicationTypeId} /><SubmitButton className="button secondary" pendingText="Resetting...">Reset Override to Version Default</SubmitButton></form> : null}
+    {applicationTypeId && hasOverride ? <form action={resetPtcApplicationTypeRuleAction} className="actions"><input type="hidden" name="versionId" value={versionId} />
+      {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}<input type="hidden" name="applicationTypeId" value={applicationTypeId} /><SubmitButton className="button secondary" pendingText="Resetting...">Reset Override to Version Default</SubmitButton></form> : null}
   </section>;
 }
