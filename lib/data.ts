@@ -256,7 +256,8 @@ export async function getPttApplicationRecords(options: VersionScopedOptions = {
     include: {
       version: true,
       createdBy: true,
-      editedBy: true
+      editedBy: true,
+      checkFindings: { where: { active: true }, orderBy: { createdAt: "asc" } }
     },
     orderBy: { createdAt: "desc" }
   });
@@ -279,6 +280,9 @@ export async function getPttApplicationRecords(options: VersionScopedOptions = {
     versionName: record.version?.name || "Uncategorized",
     createdByName: record.createdBy.name,
     editedByName: record.editedBy?.name || "",
+    manualRemarks: record.remarks || "",
+    activeFindingMessages: record.checkFindings.map((finding) => finding.message),
+    remarks: mergeRemarks(record.remarks, record.checkFindings.map((finding) => finding.message)),
     pttNumberDuplicate: !!record.pttNumber && duplicatePttNumbers.has(record.pttNumber)
   }));
 }

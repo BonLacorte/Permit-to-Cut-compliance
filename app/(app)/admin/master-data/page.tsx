@@ -48,6 +48,7 @@ import { VersionFilter } from "@/components/version-filter";
 import { requireAdmin } from "@/lib/auth";
 import { getApplicationTypesWithDocuments, getDeactivatedMasterData, getOfficeChoices, getPttTransportTypes, getVersionContext } from "@/lib/data";
 import { PERMIT_GROUP_PTT } from "@/lib/ptt";
+import { PTT_VEHICLE_CAPACITY_OPTIONS, pttCapacityCategoryLabel } from "@/lib/ptt-checks";
 import { prisma } from "@/lib/prisma";
 import { ruleConfig } from "@/lib/ptc-calculation-rules";
 import { Role } from "@prisma/client";
@@ -311,7 +312,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
           <SubmitButton pendingText="Adding transport type...">Add Transport Type</SubmitButton>
         </form>
         <table>
-          <thead><tr><th>Version</th><th>Type of Transport</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Version</th><th>Type of Transport</th><th>Capacity Mapping</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
             {pttTransportTypes.map((type) => (
               <tr key={type.id}>
@@ -327,6 +328,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
                     <SubmitButton className="button secondary" pendingText="Saving...">Save</SubmitButton>
                   </form>
                 </td>
+                <td>{type.maxBoardFeet ? `${Number(type.maxBoardFeet).toLocaleString("en-PH")} bd. ft.` : pttCapacityCategoryLabel(type.capacityCategory) || <span className="muted">No mapping</span>}</td>
                 <td>{type.active ? <span className="badge ok">Active</span> : <span className="badge neutral">Archived</span>}</td>
                 <td>
                   <div className="actions">
@@ -349,7 +351,7 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
                 </td>
               </tr>
             ))}
-            {pttTransportTypes.length === 0 ? <tr><td colSpan={4}>No PTT transport types configured.</td></tr> : null}
+            {pttTransportTypes.length === 0 ? <tr><td colSpan={5}>No PTT transport types configured.</td></tr> : null}
           </tbody>
         </table>
       </section>

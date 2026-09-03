@@ -1,4 +1,5 @@
 import { formatDate, formatFee, formatValidityDays } from "@/lib/ptc";
+import { pttValidityBasisLabel } from "@/lib/ptt-checks";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
 
 export const PERMIT_GROUP_PTT = "PTT";
@@ -32,9 +33,11 @@ export type PttDisplayRecord = {
   authorizedDriverName?: string | null;
   authorizedDriverContact?: string | null;
   amountPaid?: unknown;
+  actualFee?: unknown;
   officialReceiptNumber?: string | null;
   recordedValidityDays?: number | string | null;
   actualValidityDays?: number | string | null;
+  validityBasis?: string | null;
   validUntil?: Date | string | null;
   dateValidatedInspected?: Date | string | null;
   validatedInspectedBy?: string | null;
@@ -198,8 +201,10 @@ export function pttExportRows(records: PttDisplayRecord[]) {
     "Plate/Container/Vessel Number": record.vehiclePlateNumber || "",
     "Authorized Driver Name": record.authorizedDriverName || "",
     "Authorized Driver Contact": record.authorizedDriverContact || "",
-    "Amount Paid": formatFee(record.amountPaid),
+    "Recorded Fee": formatFee(record.amountPaid),
+    "Actual Fee": formatFee(record.actualFee),
     "OR Number": record.officialReceiptNumber || "",
+    "Validity Basis": pttValidityBasisLabel(record.validityBasis),
     "Recorded Validity": formatValidityDays(record.recordedValidityDays),
     "Actual Validity": formatValidityDays(record.actualValidityDays),
     "Date Validated/Inspected": formatDate(record.dateValidatedInspected),

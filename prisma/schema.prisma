@@ -16,11 +16,36 @@ enum Role {
 enum FeatureKey {
   PTC_FEES_CHECKER
   PTC_VALIDITY_CHECKER
+  PTT_FEES_CHECKER
+  PTT_VALIDITY_CHECKER
+  PTT_VEHICLE_CAPACITY_CHECKER
 }
 
 enum ApplicationCheckType {
   Fee
   Validity
+}
+
+enum PttCheckType {
+  Fee
+  Validity
+  Vehicle
+}
+
+enum PttValidityBasis {
+  WithinMunicipality
+  WithinProvince
+  WithinRegion
+  OutsideRegionInterIsland
+}
+
+enum PttVehicleCapacityCategory {
+  SmallerThanJeep
+  Jeep
+  ElfOrSixWheelerTruck
+  ForwardTruck
+  TenWheelerTruck
+  TwelveWheelerAndAbove
 }
 
 enum LocExemption {
@@ -50,6 +75,7 @@ model User {
   activity         ActivityLog[]
   featureAccess    UserFeatureAccess[]
   checkRuns        ApplicationCheckRun[]
+  pttCheckRuns     PttApplicationCheckRun[]
 
   @@map("users")
 }
@@ -322,9 +348,11 @@ model PttApplicationRecord {
   authorizedDriverName                String?
   authorizedDriverContact             String?
   amountPaid                          Decimal?    @db.Decimal(12, 2)
+  actualFee                           Decimal?    @db.Decimal(12, 2)
   officialReceiptNumber               String?
   recordedValidityDays                Int?
   actualValidityDays                  Int?
+  validityBasis                       PttValidityBasis?
   validUntil                          DateTime?
   dateValidatedInspected              DateTime?
   validatedInspectedBy                String?
@@ -338,6 +366,8 @@ model PttApplicationRecord {
   version                             PtcVersion? @relation(fields: [versionId], references: [id])
   createdBy                           User        @relation("CreatedPttRecords", fields: [createdById], references: [id])
   editedBy                            User?       @relation("EditedPttRecords", fields: [editedById], references: [id])
+  checkRuns                           PttApplicationCheckRun[]
+  checkFindings                       PttApplicationCheckFinding[]
 
   @@index([versionId])
   @@index([group])
@@ -348,18 +378,55 @@ model PttApplicationRecord {
 }
 
 model PttTransportType {
-  id        String     @id @default(cuid())
-  group     String     @default("PTT")
-  versionId String
-  name      String
-  active    Boolean    @default(true)
-  sortOrder Int        @default(0)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  version   PtcVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  id               String                      @id @default(cuid())
+  group            String                      @default("PTT")
+  versionId        String
+  name             String
+  capacityCategory PttVehicleCapacityCategory?
+  maxBoardFeet     Decimal?                    @db.Decimal(12, 2)
+  active           Boolean                     @default(true)
+  sortOrder        Int                         @default(0)
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+  version          PtcVersion                  @relation(fields: [versionId], references: [id], onDelete: Cascade)
 
   @@unique([versionId, name])
   @@index([group])
   @@index([versionId])
   @@map("ptt_transport_types")
+}
+
+model PttApplicationCheckRun {
+  id                     String               @id @default(cuid())
+  pttApplicationRecordId String
+  checkType              PttCheckType
+  appliedById            String
+  inputSnapshot          Json
+  ruleSnapshot           Json
+  outputSnapshot         Json
+  comparisonSnapshot     Json
+  createdAt              DateTime             @default(now())
+  pttApplicationRecord   PttApplicationRecord @relation(fields: [pttApplicationRecordId], references: [id], onDelete: Cascade)
+  appliedBy              User                 @relation(fields: [appliedById], references: [id])
+
+  @@index([pttApplicationRecordId, createdAt])
+  @@index([appliedById])
+  @@map("ptt_application_check_runs")
+}
+
+model PttApplicationCheckFinding {
+  id                     String               @id @default(cuid())
+  pttApplicationRecordId String
+  checkType              PttCheckType
+  message                String
+  active                 Boolean              @default(true)
+  comparisonSnapshot     Json
+  resolvedAt             DateTime?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  pttApplicationRecord   PttApplicationRecord @relation(fields: [pttApplicationRecordId], references: [id], onDelete: Cascade)
+
+  @@unique([pttApplicationRecordId, checkType])
+  @@index([pttApplicationRecordId, active])
+  @@map("ptt_application_check_findings")
 }

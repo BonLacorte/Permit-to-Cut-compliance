@@ -37,6 +37,9 @@ export function UsersTable({ users, currentUserId }: { users: UserRow[]; current
                         <input type="hidden" name="userId" value={user.id} />
                         <label className="checkbox-row"><input name="ptcFeesChecker" type="checkbox" defaultChecked={user.features.includes("PTC_FEES_CHECKER")} />PTC Fees</label>
                         <label className="checkbox-row"><input name="ptcValidityChecker" type="checkbox" defaultChecked={user.features.includes("PTC_VALIDITY_CHECKER")} />PTC Validity</label>
+                        <label className="checkbox-row"><input name="pttFeesChecker" type="checkbox" defaultChecked={user.features.includes("PTT_FEES_CHECKER")} />PTT Fees</label>
+                        <label className="checkbox-row"><input name="pttValidityChecker" type="checkbox" defaultChecked={user.features.includes("PTT_VALIDITY_CHECKER")} />PTT Validity</label>
+                        <label className="checkbox-row"><input name="pttVehicleCapacityChecker" type="checkbox" defaultChecked={user.features.includes("PTT_VEHICLE_CAPACITY_CHECKER")} />PTT Vehicle Capacity</label>
                         <SubmitButton className="button secondary" pendingText="Saving...">Save</SubmitButton>
                       </form>
                     ) : null}

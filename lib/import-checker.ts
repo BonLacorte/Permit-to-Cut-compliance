@@ -105,6 +105,30 @@ function locExemptionIsValid(value: unknown) {
   return ["owner", "others"].includes(normalized(value));
 }
 
+function pttValidityBasisIsValid(value: unknown) {
+  if (!text(value)) return true;
+  return [
+    "within the municipality",
+    "within municipality",
+    "municipality",
+    "withinmunicipality",
+    "within the province",
+    "within province",
+    "province",
+    "withinprovince",
+    "within the region",
+    "within region",
+    "region",
+    "withinregion",
+    "outside the region / inter-island",
+    "outside the region",
+    "outside region",
+    "inter-island",
+    "inter island",
+    "outsideregioninterisland"
+  ].includes(normalized(value));
+}
+
 function issue(row: number, field: string, severity: ImportIssueSeverity, message: string, value: unknown): ImportPreviewIssue {
   return { row, field, severity, message, value: text(value) };
 }
@@ -220,16 +244,17 @@ export function checkPttImportWorkbook(buffer: Buffer, context: PttImportCheckCo
   }
 
   rows.forEach(({ row, rowNumber }, index) => {
-    [3, 8, 25, 27].forEach((columnIndex) => {
+    [3, 8, 27, 29].forEach((columnIndex) => {
       if (!dateIsValid(row[columnIndex])) issues.push(issue(rowNumber, PTT_IMPORT_COLUMNS[columnIndex], "Error", "Invalid date value.", row[columnIndex]));
     });
-    [10, 12, 21].forEach((columnIndex) => {
+    [10, 12, 21, 22].forEach((columnIndex) => {
       if (!numberIsValid(row[columnIndex])) issues.push(issue(rowNumber, PTT_IMPORT_COLUMNS[columnIndex], "Error", "Invalid numeric value.", row[columnIndex]));
     });
-    [23, 24].forEach((columnIndex) => {
+    [25, 26].forEach((columnIndex) => {
       if (!numberIsValid(row[columnIndex])) issues.push(issue(rowNumber, PTT_IMPORT_COLUMNS[columnIndex], "Error", "Invalid whole-day number.", row[columnIndex]));
     });
     if (!booleanIsValid(row[11])) issues.push(issue(rowNumber, "Certificate of Quantity/Volume Attached", "Error", "Use Yes, No, True, False, or leave it blank.", row[11]));
+    if (!pttValidityBasisIsValid(row[24])) issues.push(issue(rowNumber, "Validity Basis", "Error", "Use a supported PTT validity basis or leave it blank.", row[24]));
 
     issues.push(...duplicateIssues(rowNumber, "PTT Number", row[2], existing, seen));
     issues.push(...officeIssues(rowNumber, row[0], row[1], context.officeChoices));

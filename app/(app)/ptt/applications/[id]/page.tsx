@@ -1,10 +1,14 @@
+import { FeatureKey } from "@prisma/client";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EditPttApplicationButton } from "@/components/edit-ptt-application-button";
 import { StatusBadge } from "@/components/status-badge";
+import { requireUser, userHasFeature } from "@/lib/auth";
 import { getOfficeChoices, getPttTransportTypes, getVersionContext } from "@/lib/data";
 import { formatDate, formatFee, formatValidityDays } from "@/lib/ptc";
+import { mergeRemarks } from "@/lib/ptc-checks";
 import { displayPttName, formatPttBoolean, formatPttNumber, PERMIT_GROUP_PTT, pttStatus } from "@/lib/ptt";
+import { pttValidityBasisLabel } from "@/lib/ptt-checks";
 import { prisma } from "@/lib/prisma";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
 
@@ -17,30 +21,39 @@ function formNumberValue(value: unknown) {
 }
 
 export default async function PttApplicationDetailPage({ params }: { params: { id: string } }) {
-  const [record, versionContext, officeChoices, transportTypes] = await Promise.all([
+  const user = await requireUser();
+  const [record, versionContext, officeChoices, transportTypes, feesAccess, validityAccess, vehicleAccess] = await Promise.all([
     prisma.pttApplicationRecord.findUnique({
       where: { id: params.id },
       include: {
         version: true,
         createdBy: true,
-        editedBy: true
+        editedBy: true,
+        checkFindings: { where: { active: true }, orderBy: { checkType: "asc" } },
+        checkRuns: { include: { appliedBy: true }, orderBy: { createdAt: "desc" } }
       }
     }),
     getVersionContext(null, PERMIT_GROUP_PTT),
     getOfficeChoices(),
-    getPttTransportTypes()
+    getPttTransportTypes(),
+    userHasFeature(user, FeatureKey.PTT_FEES_CHECKER),
+    userHasFeature(user, FeatureKey.PTT_VALIDITY_CHECKER),
+    userHasFeature(user, FeatureKey.PTT_VEHICLE_CAPACITY_CHECKER)
   ]);
 
   if (!record) notFound();
   const status = pttStatus(record);
   const recordVersionParam = record.versionId || UNCATEGORIZED_VERSION;
   const dateIssued = formatDate(record.dateIssued);
+  const activeFindingMessages = record.checkFindings.map((finding) => finding.message);
+  const mergedRemarks = mergeRemarks(record.remarks, activeFindingMessages);
 
   return (
     <div className="grid">
       <div className="topbar">
         <Link className="button secondary" href={`/ptt/applications?version=${recordVersionParam}`}>Back to PTT Applications</Link>
         <EditPttApplicationButton
+          checkerAccess={{ fees: feesAccess, validity: validityAccess, vehicle: vehicleAccess }}
           record={{
             id: record.id,
             versionId: record.versionId,
@@ -68,9 +81,11 @@ export default async function PttApplicationDetailPage({ params }: { params: { i
             authorizedDriverName: record.authorizedDriverName || "",
             authorizedDriverContact: record.authorizedDriverContact || "",
             amountPaid: formNumberValue(record.amountPaid),
+            actualFee: formNumberValue(record.actualFee),
             officialReceiptNumber: record.officialReceiptNumber || "",
             recordedValidityDays: formNumberValue(record.recordedValidityDays),
             actualValidityDays: formNumberValue(record.actualValidityDays),
+            validityBasis: record.validityBasis || "",
             dateValidatedInspected: formatDate(record.dateValidatedInspected),
             validatedInspectedBy: record.validatedInspectedBy || "",
             issuedByDate: formatDate(record.issuedByDate),
@@ -81,7 +96,7 @@ export default async function PttApplicationDetailPage({ params }: { params: { i
             name: office.name,
             provincialOffices: office.provincialOffices.map((provincial) => ({ id: provincial.id, name: provincial.name }))
           }))}
-          transportTypes={transportTypes.map((type) => ({ id: type.id, versionId: type.versionId, name: type.name, active: type.active }))}
+          transportTypes={transportTypes.map((type) => ({ id: type.id, versionId: type.versionId, name: type.name, active: type.active, capacityCategory: type.capacityCategory, maxBoardFeet: type.maxBoardFeet === null ? null : String(type.maxBoardFeet) }))}
           versionOptions={versionContext.options}
         />
       </div>
@@ -89,13 +104,27 @@ export default async function PttApplicationDetailPage({ params }: { params: { i
       <div>
         <h1>{displayPttName(record)}</h1>
         <p className="muted">{record.pttNumber ? `PTT Number ${record.pttNumber}` : "No PTT number recorded yet"}</p>
-        {record.remarks ? <p>{record.remarks}</p> : null}
+        {mergedRemarks ? <p>{mergedRemarks}</p> : null}
       </div>
 
       <section className="grid cols-3">
         <div className="card stat"><span>Status</span><strong><StatusBadge status={status} /></strong></div>
-        <div className="card stat"><span>Amount Paid</span><strong>{formatFee(record.amountPaid)}</strong></div>
+        <div className="card stat"><span>Recorded Fee</span><strong>{formatFee(record.amountPaid)}</strong></div>
+        <div className="card stat"><span>Actual Fee</span><strong>{formatFee(record.actualFee)}</strong></div>
         <div className="card stat"><span>Volume</span><strong>{formatPttNumber(record.volumeBoardFeet) || "0"}</strong></div>
+      </section>
+
+      <section className="panel">
+        <h2>PTT System Check Findings</h2>
+        {record.checkFindings.length > 0 ? <ul>{record.checkFindings.map((finding) => <li key={finding.id}>{finding.message}</li>)}</ul> : <p className="muted">No active PTT system findings.</p>}
+      </section>
+
+      <section className="panel">
+        <h2>PTT Check History</h2>
+        <div className="table-wrap"><table><thead><tr><th>Check</th><th>Result</th><th>Applied By</th><th>Date</th></tr></thead><tbody>
+          {record.checkRuns.map((run) => <tr key={run.id}><td>{run.checkType}</td><td>{JSON.stringify(run.outputSnapshot)}</td><td>{run.appliedBy.name}</td><td>{formatDate(run.createdAt)}</td></tr>)}
+          {record.checkRuns.length === 0 ? <tr><td colSpan={4}>No PTT checker results saved.</td></tr> : null}
+        </tbody></table></div>
       </section>
 
       <section className="panel">
@@ -128,8 +157,10 @@ export default async function PttApplicationDetailPage({ params }: { params: { i
           <div><span>Plate / Container / Vessel Number</span><strong>{metadataValue(record.vehiclePlateNumber || "")}</strong></div>
           <div><span>Authorized Driver Name</span><strong>{metadataValue(record.authorizedDriverName || "")}</strong></div>
           <div><span>Authorized Driver Contact</span><strong>{metadataValue(record.authorizedDriverContact || "")}</strong></div>
-          <div><span>Amount Paid</span><strong>{formatFee(record.amountPaid)}</strong></div>
+          <div><span>Recorded Fee</span><strong>{formatFee(record.amountPaid)}</strong></div>
+          <div><span>Actual Fee</span><strong>{formatFee(record.actualFee)}</strong></div>
           <div><span>Official Receipt Number</span><strong>{metadataValue(record.officialReceiptNumber || "")}</strong></div>
+          <div><span>Validity Basis</span><strong>{metadataValue(pttValidityBasisLabel(record.validityBasis))}</strong></div>
           <div><span>Recorded Validity</span><strong>{metadataValue(formatValidityDays(record.recordedValidityDays))}</strong></div>
           <div><span>Actual Validity</span><strong>{metadataValue(formatValidityDays(record.actualValidityDays))}</strong></div>
           <div><span>Date Validated/Inspected</span><strong>{metadataValue(formatDate(record.dateValidatedInspected))}</strong></div>

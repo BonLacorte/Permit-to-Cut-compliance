@@ -20,6 +20,8 @@ const completeRecord = {
   transportType: "10 WHEELER",
   vehiclePlateNumber: "CAF-5164",
   amountPaid: "3000",
+  actualFee: "3000",
+  validityBasis: "WithinRegion",
   officialReceiptNumber: "6110665 W",
   recordedValidityDays: 3,
   actualValidityDays: null,
@@ -77,7 +79,9 @@ describe("PTT helpers", () => {
       "Regional Office": "Region IV-A",
       "Provincial Office": "Quezon I",
       "PTC Number": "1360372",
-      "Amount Paid": "3,000",
+      "Recorded Fee": "3,000",
+      "Actual Fee": "3,000",
+      "Validity Basis": "Within the Region",
       "Recorded Validity": "3",
       "Actual Validity": "",
       "Issued By Date": "2026-05-11",
@@ -174,7 +178,9 @@ describe("PTT helpers", () => {
         "Driver Name",
         "09170000000",
         "3,000",
+        "3000",
         "6110665 W",
+        "Within the Region",
         3,
         "",
         "2026-05-10",
@@ -197,6 +203,8 @@ describe("PTT helpers", () => {
       volumeBoardFeet: "2500",
       transportType: "10 WHEELER",
       amountPaid: "3000",
+      actualFee: "3000",
+      validityBasis: "WithinRegion",
       recordedValidityDays: 3,
       actualValidityDays: undefined,
       issuedByDate: new Date("2026-05-11T00:00:00.000Z"),
@@ -209,6 +217,9 @@ describe("PTT helpers", () => {
     const workbook = XLSX.read(buildPttImportTemplateWorkbook(), { type: "buffer" });
     const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets["PTT Import"], { header: 1 });
     expect(rows[0]).toEqual([...PTT_IMPORT_COLUMNS]);
+    expect(rows[0]).toContain("Recorded Fee");
+    expect(rows[0]).toContain("Actual Fee");
+    expect(rows[0]).toContain("Validity Basis");
     expect(rows[0]).toContain("Recorded Validity");
     expect(rows[0]).toContain("Actual Validity");
     expect(rows[0]).toContain("Issued By Date");

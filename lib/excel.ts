@@ -53,8 +53,10 @@ export const PTT_IMPORT_COLUMNS = [
   "Plate/Container/Vessel Number",
   "Authorized Driver Name",
   "Authorized Driver Contact",
-  "Amount Paid",
+  "Recorded Fee",
+  "Actual Fee",
   "OR Number",
+  "Validity Basis",
   "Recorded Validity",
   "Actual Validity",
   "Date Validated/Inspected",
@@ -87,9 +89,11 @@ export type ParsedPttRecord = {
   authorizedDriverName?: string;
   authorizedDriverContact?: string;
   amountPaid?: string;
+  actualFee?: string;
   officialReceiptNumber?: string;
   recordedValidityDays?: number;
   actualValidityDays?: number;
+  validityBasis?: "WithinMunicipality" | "WithinProvince" | "WithinRegion" | "OutsideRegionInterIsland";
   dateValidatedInspected?: Date;
   validatedInspectedBy?: string;
   issuedByDate?: Date;
@@ -144,6 +148,15 @@ function parseBooleanCell(value: unknown) {
   return undefined;
 }
 
+
+function parsePttValidityBasisCell(value: unknown) {
+  const text = cellText(value).toLowerCase();
+  if (["within the municipality", "within municipality", "municipality", "withinmunicipality"].includes(text)) return "WithinMunicipality";
+  if (["within the province", "within province", "province", "withinprovince"].includes(text)) return "WithinProvince";
+  if (["within the region", "within region", "region", "withinregion"].includes(text)) return "WithinRegion";
+  if (["outside the region / inter-island", "outside the region", "outside region", "inter-island", "inter island", "outsideregioninterisland"].includes(text)) return "OutsideRegionInterIsland";
+  return undefined;
+}
 
 function parseLocExemptionCell(value: unknown) {
   const text = cellText(value).toLowerCase();
@@ -227,14 +240,16 @@ export function parsePttRecordsWorkbook(buffer: Buffer): ParsedPttRecord[] {
       authorizedDriverName: cellText(row[19]) || undefined,
       authorizedDriverContact: cellText(row[20]) || undefined,
       amountPaid: parseDecimalCell(row[21]),
-      officialReceiptNumber: cellText(row[22]) || undefined,
-      recordedValidityDays: parseNumberCell(row[23]),
-      actualValidityDays: parseNumberCell(row[24]),
-      dateValidatedInspected: parseDateCell(row[25]),
-      validatedInspectedBy: cellText(row[26]) || undefined,
-      issuedByDate: parseDateCell(row[27]),
-      issuedBy: cellText(row[28]) || undefined,
-      remarks: cellText(row[29]) || undefined
+      actualFee: parseDecimalCell(row[22]),
+      officialReceiptNumber: cellText(row[23]) || undefined,
+      validityBasis: parsePttValidityBasisCell(row[24]),
+      recordedValidityDays: parseNumberCell(row[25]),
+      actualValidityDays: parseNumberCell(row[26]),
+      dateValidatedInspected: parseDateCell(row[27]),
+      validatedInspectedBy: cellText(row[28]) || undefined,
+      issuedByDate: parseDateCell(row[29]),
+      issuedBy: cellText(row[30]) || undefined,
+      remarks: cellText(row[31]) || undefined
     }));
 }
 

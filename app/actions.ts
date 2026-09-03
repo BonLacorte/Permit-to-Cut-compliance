@@ -1,6 +1,6 @@
 "use server";
 
-import { ApplicationCheckType, DocumentRequirementMode, FeatureKey, LocExemption, Prisma, Role } from "@prisma/client";
+import { ApplicationCheckType, DocumentRequirementMode, FeatureKey, LocExemption, Prisma, PttCheckType, PttValidityBasis, PttVehicleCapacityCategory, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -11,6 +11,7 @@ import { checkPtcImportWorkbook, checkPttImportWorkbook } from "@/lib/import-che
 import { ptcImportCheckContext, pttImportCheckContext } from "@/lib/import-checker-context";
 import { PERMIT_GROUP_PTC } from "@/lib/ptc";
 import { PERMIT_GROUP_PTT } from "@/lib/ptt";
+import { calculatePttFee, calculatePttValidity, checkPttVehicleCapacity, pttCapacityMaxFromCategory, pttFeeFinding, pttValidityFinding } from "@/lib/ptt-checks";
 import { prisma } from "@/lib/prisma";
 import { calculatePtcFee, calculatePtcValidity, feeFinding, normalizePtcCalculationConfig, validityFinding } from "@/lib/ptc-checks";
 import { defaultRuleData, resolvedPtcCalculationRule } from "@/lib/ptc-calculation-rules";
@@ -95,6 +96,26 @@ function nullableLocExemption(value: FormDataEntryValue | null) {
   const text = String(value || "").trim();
   if (text === "Owner") return LocExemption.Owner;
   if (text === "Others") return LocExemption.Others;
+  return null;
+}
+
+function nullablePttValidityBasis(value: FormDataEntryValue | null) {
+  const text = String(value || "").trim();
+  if (text === "WithinMunicipality") return PttValidityBasis.WithinMunicipality;
+  if (text === "WithinProvince") return PttValidityBasis.WithinProvince;
+  if (text === "WithinRegion") return PttValidityBasis.WithinRegion;
+  if (text === "OutsideRegionInterIsland") return PttValidityBasis.OutsideRegionInterIsland;
+  return null;
+}
+
+function nullablePttVehicleCapacityCategory(value: FormDataEntryValue | null) {
+  const text = String(value || "").trim();
+  if (text === "SmallerThanJeep") return PttVehicleCapacityCategory.SmallerThanJeep;
+  if (text === "Jeep") return PttVehicleCapacityCategory.Jeep;
+  if (text === "ElfOrSixWheelerTruck") return PttVehicleCapacityCategory.ElfOrSixWheelerTruck;
+  if (text === "ForwardTruck") return PttVehicleCapacityCategory.ForwardTruck;
+  if (text === "TenWheelerTruck") return PttVehicleCapacityCategory.TenWheelerTruck;
+  if (text === "TwelveWheelerAndAbove") return PttVehicleCapacityCategory.TwelveWheelerAndAbove;
   return null;
 }
 
@@ -285,15 +306,138 @@ function pttRecordData(formData: FormData) {
     authorizedDriverName: nullableString(formData.get("authorizedDriverName")),
     authorizedDriverContact: nullableString(formData.get("authorizedDriverContact")),
     amountPaid: nullableDecimal(formData.get("amountPaid")),
+    actualFee: nullableDecimal(formData.get("actualFee")),
     officialReceiptNumber: nullableString(formData.get("officialReceiptNumber")),
     recordedValidityDays: nullableInt(formData.get("recordedValidityDays")),
     actualValidityDays: nullableInt(formData.get("actualValidityDays")),
+    validityBasis: nullablePttValidityBasis(formData.get("validityBasis")),
     dateValidatedInspected: nullableDate(formData.get("dateValidatedInspected")),
     validatedInspectedBy: nullableString(formData.get("validatedInspectedBy")),
     issuedByDate: nullableDate(formData.get("issuedByDate")),
     issuedBy: nullableString(formData.get("issuedBy")),
     remarks: nullableString(formData.get("remarks"))
   };
+}
+
+type PendingPttCheck = {
+  checkType: PttCheckType;
+  inputSnapshot: Prisma.InputJsonObject;
+  ruleSnapshot: Prisma.InputJsonObject;
+  outputSnapshot: Prisma.InputJsonObject;
+  comparisonSnapshot: Prisma.InputJsonObject;
+  findingMessage: string | null;
+};
+
+async function buildPttChecks(formData: FormData, user: { id: string; role: Role }, versionId: string | null) {
+  const applyFee = String(formData.get("applyPttFeeCheck") || "") === "true";
+  const applyValidity = String(formData.get("applyPttValidityCheck") || "") === "true";
+  const applyVehicle = String(formData.get("applyPttVehicleCheck") || "") === "true";
+  if (!applyFee && !applyValidity && !applyVehicle) return { checks: [] as PendingPttCheck[], data: {} };
+  if (!versionId) return { error: "Choose a PTT Version before using a checker." };
+  if (applyFee && !(await userHasFeature(user, FeatureKey.PTT_FEES_CHECKER))) return { error: "You do not have access to the PTT Fees Checker." };
+  if (applyValidity && !(await userHasFeature(user, FeatureKey.PTT_VALIDITY_CHECKER))) return { error: "You do not have access to the PTT Validity Checker." };
+  if (applyVehicle && !(await userHasFeature(user, FeatureKey.PTT_VEHICLE_CAPACITY_CHECKER))) return { error: "You do not have access to the PTT Vehicle Capacity Checker." };
+
+  try {
+    const checks: PendingPttCheck[] = [];
+    const data: { actualFee?: number; actualValidityDays?: number } = {};
+    const volumeBoardFeet = nullableDecimal(formData.get("volumeBoardFeet"));
+    const recordedFee = nullableDecimal(formData.get("amountPaid"));
+    const recordedValidityDays = nullableInt(formData.get("recordedValidityDays"));
+    const validityBasis = nullablePttValidityBasis(formData.get("validityBasis"));
+    const outsideRegionValidityDays = nullableInt(formData.get("outsideRegionValidityDays"));
+    const transportType = nullableString(formData.get("transportType"));
+    const transport = transportType
+      ? await prisma.pttTransportType.findFirst({ where: { versionId, name: transportType, group: PERMIT_GROUP_PTT } })
+      : null;
+    const maxBoardFeet = transport?.maxBoardFeet ?? pttCapacityMaxFromCategory(transport?.capacityCategory || null);
+    const transportRuleSnapshot = transport
+      ? { id: transport.id, name: transport.name, capacityCategory: transport.capacityCategory, maxBoardFeet: maxBoardFeet === null ? null : Number(maxBoardFeet) }
+      : { id: null, name: transportType, capacityCategory: null, maxBoardFeet: null };
+
+    if (applyFee) {
+      const result = calculatePttFee({ volumeBoardFeet });
+      const findingMessage = pttFeeFinding(recordedFee === null ? null : Number(recordedFee), result.actualFee);
+      data.actualFee = result.actualFee;
+      checks.push({
+        checkType: PttCheckType.Fee,
+        inputSnapshot: { volumeBoardFeet, recordedFee },
+        ruleSnapshot: { ratePerBoardFoot: result.ratePerBoardFoot },
+        outputSnapshot: result,
+        comparisonSnapshot: { recordedFee: recordedFee === null ? null : Number(recordedFee), actualFee: result.actualFee, matches: !findingMessage },
+        findingMessage
+      });
+    }
+
+    if (applyValidity) {
+      const result = calculatePttValidity({ validityBasis, outsideRegionValidityDays });
+      const findingMessage = pttValidityFinding(recordedValidityDays, result);
+      data.actualValidityDays = result.actualValidityDays;
+      checks.push({
+        checkType: PttCheckType.Validity,
+        inputSnapshot: { validityBasis, outsideRegionValidityDays, recordedValidityDays },
+        ruleSnapshot: { withinMunicipality: 1, withinProvince: 2, withinRegion: 3, outsideRegionInterIsland: [5, 6, 7] },
+        outputSnapshot: result,
+        comparisonSnapshot: { recordedValidityDays, actualValidityDays: result.actualValidityDays, matches: !findingMessage },
+        findingMessage
+      });
+    }
+
+    if (applyVehicle) {
+      const result = checkPttVehicleCapacity({ volumeBoardFeet, transportType, maxBoardFeet });
+      checks.push({
+        checkType: PttCheckType.Vehicle,
+        inputSnapshot: { volumeBoardFeet, transportType },
+        ruleSnapshot: transportRuleSnapshot,
+        outputSnapshot: result,
+        comparisonSnapshot: { volumeBoardFeet: result.volumeBoardFeet, maxBoardFeet: result.maxBoardFeet, withinCapacity: result.withinCapacity, warning: result.warning },
+        findingMessage: result.finding
+      });
+    }
+
+    return { checks, data };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not calculate the requested PTT check." };
+  }
+}
+
+async function persistPttChecks(tx: Prisma.TransactionClient, pttApplicationRecordId: string, userId: string, checks: PendingPttCheck[]) {
+  for (const check of checks) {
+    await tx.pttApplicationCheckRun.create({
+      data: {
+        pttApplicationRecordId,
+        checkType: check.checkType,
+        appliedById: userId,
+        inputSnapshot: check.inputSnapshot,
+        ruleSnapshot: check.ruleSnapshot,
+        outputSnapshot: check.outputSnapshot,
+        comparisonSnapshot: check.comparisonSnapshot
+      }
+    });
+    await tx.pttApplicationCheckFinding.upsert({
+      where: { pttApplicationRecordId_checkType: { pttApplicationRecordId, checkType: check.checkType } },
+      update: {
+        message: check.findingMessage || "Values match.",
+        active: Boolean(check.findingMessage),
+        comparisonSnapshot: check.comparisonSnapshot,
+        resolvedAt: check.findingMessage ? null : new Date()
+      },
+      create: {
+        pttApplicationRecordId,
+        checkType: check.checkType,
+        message: check.findingMessage || "Values match.",
+        active: Boolean(check.findingMessage),
+        comparisonSnapshot: check.comparisonSnapshot,
+        resolvedAt: check.findingMessage ? null : new Date()
+      }
+    });
+  }
+}
+
+function pttTransportCapacityData(formData: FormData) {
+  const capacityCategory = nullablePttVehicleCapacityCategory(formData.get("capacityCategory"));
+  const maxBoardFeet = nullableDecimal(formData.get("maxBoardFeet"));
+  return { capacityCategory, maxBoardFeet };
 }
 
 function safeReturnTo(value: FormDataEntryValue | null, fallback: string) {
@@ -691,19 +835,27 @@ export async function createPttApplicationRecordAction(formData: FormData) {
     const version = versionId ? await prisma.ptcVersion.findFirst({ where: { id: versionId, group: PERMIT_GROUP_PTT, active: true } }) : null;
     if (versionId && !version) redirectWithToast("/ptt/applications/new", "error", "Selected PTT Version was not found.");
 
-    const record = await prisma.pttApplicationRecord.create({
-      data: {
-        group: PERMIT_GROUP_PTT,
-        versionId,
-        ...pttRecordData(formData),
-        createdById: user.id
-      }
+    const pttData = pttRecordData(formData);
+    const checkResult = await buildPttChecks(formData, user, versionId);
+    if (checkResult.error) redirectWithToast("/ptt/applications/new", "error", checkResult.error);
+
+    const record = await prisma.$transaction(async (tx) => {
+      const created = await tx.pttApplicationRecord.create({
+        data: {
+          group: PERMIT_GROUP_PTT,
+          versionId,
+          ...pttData,
+          ...checkResult.data,
+          createdById: user.id
+        }
+      });
+      await persistPttChecks(tx, created.id, user.id, checkResult.checks ?? []);
+      await tx.activityLog.create({
+        data: { userId: user.id, action: "CREATE_PTT_RECORD", targetType: "ptt_application_record", targetId: created.id, metadata: { versionId } }
+      });
+      return created;
     });
     recordId = record.id;
-
-    await prisma.activityLog.create({
-      data: { userId: user.id, action: "CREATE_PTT_RECORD", targetType: "ptt_application_record", targetId: record.id, metadata: { versionId } }
-    });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
     redirectWithToast("/ptt/applications/new", "error", "Could not create the PTT application record.");
@@ -734,23 +886,30 @@ export async function updatePttApplicationRecordAction(formData: FormData) {
     const version = versionId ? await prisma.ptcVersion.findFirst({ where: { id: versionId, group: PERMIT_GROUP_PTT, active: true } }) : null;
     if (versionId && !version) redirectWithToast(returnTo, "error", "Selected PTT Version was not found.");
 
-    await prisma.pttApplicationRecord.update({
-      where: { id: input.id },
-      data: {
-        versionId,
-        ...pttRecordData(formData),
-        editedById: user.id
-      }
-    });
+    const pttData = pttRecordData(formData);
+    const checkResult = await buildPttChecks(formData, user, versionId);
+    if (checkResult.error) redirectWithToast(returnTo, "error", checkResult.error);
 
-    await prisma.activityLog.create({
-      data: {
-        userId: user.id,
-        action: "UPDATE_PTT_RECORD",
-        targetType: "ptt_application_record",
-        targetId: input.id,
-        metadata: { versionChanged: current.versionId !== versionId }
-      }
+    await prisma.$transaction(async (tx) => {
+      await tx.pttApplicationRecord.update({
+        where: { id: input.id },
+        data: {
+          versionId,
+          ...pttData,
+          ...checkResult.data,
+          editedById: user.id
+        }
+      });
+      await persistPttChecks(tx, input.id, user.id, checkResult.checks ?? []);
+      await tx.activityLog.create({
+        data: {
+          userId: user.id,
+          action: "UPDATE_PTT_RECORD",
+          targetType: "ptt_application_record",
+          targetId: input.id,
+          metadata: { versionChanged: current.versionId !== versionId }
+        }
+      });
     });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
@@ -1011,7 +1170,10 @@ export async function updateUserFeatureAccessAction(formData: FormData) {
   if (target.role !== Role.ADMIN) redirectWithToast("/admin/users", "error", "Feature access can only be assigned to Admin accounts.");
   const features = [
     ...(formData.get("ptcFeesChecker") === "on" ? [FeatureKey.PTC_FEES_CHECKER] : []),
-    ...(formData.get("ptcValidityChecker") === "on" ? [FeatureKey.PTC_VALIDITY_CHECKER] : [])
+    ...(formData.get("ptcValidityChecker") === "on" ? [FeatureKey.PTC_VALIDITY_CHECKER] : []),
+    ...(formData.get("pttFeesChecker") === "on" ? [FeatureKey.PTT_FEES_CHECKER] : []),
+    ...(formData.get("pttValidityChecker") === "on" ? [FeatureKey.PTT_VALIDITY_CHECKER] : []),
+    ...(formData.get("pttVehicleCapacityChecker") === "on" ? [FeatureKey.PTT_VEHICLE_CAPACITY_CHECKER] : [])
   ];
 
   await prisma.$transaction(async (tx) => {
@@ -1335,8 +1497,8 @@ export async function createPttTransportTypeAction(formData: FormData) {
     const count = await prisma.pttTransportType.count({ where: { versionId } });
     await prisma.pttTransportType.upsert({
       where: { versionId_name: { versionId, name } },
-      update: { active: true },
-      create: { group: PERMIT_GROUP_PTT, versionId, name, sortOrder: count + 1 }
+      update: { active: true, ...pttTransportCapacityData(formData) },
+      create: { group: PERMIT_GROUP_PTT, versionId, name, sortOrder: count + 1, ...pttTransportCapacityData(formData) }
     });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
@@ -1358,7 +1520,7 @@ export async function updatePttTransportTypeAction(formData: FormData) {
   try {
     const version = await prisma.ptcVersion.findFirst({ where: { id: versionId, group: PERMIT_GROUP_PTT } });
     if (!version) redirectWithToast(returnTo, "error", "Selected PTT Version was not found.");
-    await prisma.pttTransportType.update({ where: { id }, data: { versionId, name, active: true } });
+    await prisma.pttTransportType.update({ where: { id }, data: { versionId, name, active: true, ...pttTransportCapacityData(formData) } });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
     redirectWithToast(returnTo, "error", "Could not update the PTT transport type. It may already exist in this Version.");
@@ -2063,9 +2225,11 @@ export async function importPttRecordsAction(formData: FormData) {
     authorizedDriverName: record.authorizedDriverName || null,
     authorizedDriverContact: record.authorizedDriverContact || null,
     amountPaid: record.amountPaid ?? null,
+    actualFee: record.actualFee ?? null,
     officialReceiptNumber: record.officialReceiptNumber || null,
     recordedValidityDays: record.recordedValidityDays ?? null,
     actualValidityDays: record.actualValidityDays ?? null,
+    validityBasis: record.validityBasis ?? null,
     dateValidatedInspected: record.dateValidatedInspected || null,
     validatedInspectedBy: record.validatedInspectedBy || null,
     issuedByDate: record.issuedByDate || null,
