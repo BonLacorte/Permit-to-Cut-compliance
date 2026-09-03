@@ -32,7 +32,7 @@ export function UsersTable({ users, currentUserId }: { users: UserRow[]; current
                   <td>{user.role}</td>
                   <td>
                     {user.role === "SUPERADMIN" ? <span className="badge ok">All checker features</span> : null}
-                    {user.role === "ADMIN" ? (
+                    {user.role === "ADMIN" || user.role === "STAFF" ? (
                       <form action={updateUserFeatureAccessAction} className="inline-edit-form">
                         <input type="hidden" name="userId" value={user.id} />
                         <label className="checkbox-row"><input name="ptcFeesChecker" type="checkbox" defaultChecked={user.features.includes("PTC_FEES_CHECKER")} />PTC Fees</label>
@@ -43,7 +43,6 @@ export function UsersTable({ users, currentUserId }: { users: UserRow[]; current
                         <SubmitButton className="button secondary" pendingText="Saving...">Save</SubmitButton>
                       </form>
                     ) : null}
-                    {user.role === "STAFF" ? <span className="muted">Not available for Staff</span> : null}
                   </td>
                   <td>{user.createdAt}</td>
                   <td>

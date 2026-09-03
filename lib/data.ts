@@ -140,6 +140,18 @@ export async function getPttTransportTypes(includeInactive = false) {
   });
 }
 
+export async function getPttValidityRules(includeInactiveVersions = false) {
+  return prisma.pttValidityRule.findMany({
+    where: {
+      version: {
+        group: PERMIT_GROUP_PTT,
+        ...(includeInactiveVersions ? {} : { active: true })
+      }
+    },
+    include: { version: true },
+    orderBy: [{ version: { sortOrder: "asc" } }, { version: { name: "asc" } }]
+  });
+}
 export async function getReportData(options: VersionScopedOptions = {}) {
   const group = options.group ?? PERMIT_GROUP_PTC;
   const versionId = options.versionId;

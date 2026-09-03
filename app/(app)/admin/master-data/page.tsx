@@ -35,6 +35,7 @@ import {
   updateProvincialOfficeAction,
   updatePttVersionAction,
   updatePttTransportTypeAction,
+  savePttValidityRuleAction,
   updatePtcVersionAction,
   updateRegionalOfficeAction,
   updateRequiredDocumentAction
@@ -43,14 +44,16 @@ import { ConfirmDeleteForm } from "@/components/confirm-delete-form";
 import { ExportExcelButton } from "@/components/export-excel-button";
 import { ImportCheckerPanel } from "@/components/import-checker-panel";
 import { PtcCalculationRulesManager } from "@/components/ptc-calculation-rules-manager";
+import { PttValidityRulesManager } from "@/components/ptt-validity-rules-manager";
 import { SubmitButton } from "@/components/submit-button";
 import { VersionFilter } from "@/components/version-filter";
 import { requireAdmin } from "@/lib/auth";
-import { getApplicationTypesWithDocuments, getDeactivatedMasterData, getOfficeChoices, getPttTransportTypes, getVersionContext } from "@/lib/data";
+import { getApplicationTypesWithDocuments, getDeactivatedMasterData, getOfficeChoices, getPttTransportTypes, getPttValidityRules, getVersionContext } from "@/lib/data";
 import { PERMIT_GROUP_PTT } from "@/lib/ptt";
 import { PTT_VEHICLE_CAPACITY_OPTIONS, pttCapacityCategoryLabel } from "@/lib/ptt-checks";
 import { prisma } from "@/lib/prisma";
 import { ruleConfig } from "@/lib/ptc-calculation-rules";
+import { pttValidityRuleConfig } from "@/lib/ptt-validity-rules";
 import { Role } from "@prisma/client";
 
 type MasterDataTab = "general" | "ptc" | "ptt" | "imports" | "deactivated";
@@ -58,7 +61,7 @@ type MasterDataTab = "general" | "ptc" | "ptt" | "imports" | "deactivated";
 const MASTER_DATA_TABS: { id: MasterDataTab; label: string; description: string }[] = [
   { id: "general", label: "General", description: "Regional and provincial offices" },
   { id: "ptc", label: "PTC", description: "Versions, application types, documents, and rules" },
-  { id: "ptt", label: "PTT", description: "Versions and transport types" },
+  { id: "ptt", label: "PTT", description: "Versions, transport types, and rules" },
   { id: "imports", label: "Imports / Exports", description: "Excel tools and filters" },
   { id: "deactivated", label: "Deactivated Data", description: "Restore or permanently delete" }
 ];
@@ -110,14 +113,15 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
     pttVersions: [],
     pttTransportTypes: []
   };
-  const [applicationTypes, officeChoices, deactivated, calculationRules, pttTransportTypes] = await Promise.all([
+  const [applicationTypes, officeChoices, deactivated, calculationRules, pttTransportTypes, pttValidityRules] = await Promise.all([
     activeTab === "ptc" ? getApplicationTypesWithDocuments({ versionId: selectedVersionId }) : Promise.resolve([]),
     activeTab === "general" || activeTab === "imports" ? getOfficeChoices() : Promise.resolve([]),
     activeTab === "deactivated" ? getDeactivatedMasterData() : Promise.resolve(emptyDeactivated),
     activeTab === "ptc" && user.role === Role.SUPERADMIN && selectedVersionId
       ? prisma.ptcCalculationRule.findMany({ where: { versionId: selectedVersionId }, orderBy: { applicationTypeId: "asc" } })
       : Promise.resolve([]),
-    activeTab === "ptt" ? getPttTransportTypes(true) : Promise.resolve([])
+    activeTab === "ptt" ? getPttTransportTypes(true) : Promise.resolve([]),
+    activeTab === "ptt" ? getPttValidityRules(true) : Promise.resolve([])
   ]);
   const deactivatedCount =
     deactivated.versions.length +
@@ -238,13 +242,13 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
 
       {activeTab === "ptt" ? (
         <>
-          <div className="master-data-group-title"><h2>PTT Master Data</h2><p className="muted">Manage PTT versions and transport type choices.</p></div>
+          <div className="master-data-group-title"><h2>PTT Master Data</h2><p className="muted">Manage PTT versions, transport choices, capacity mapping, and validity rules.</p></div>
 
       <section className="panel table-wrap">
         <div className="section-heading-row">
           <div>
             <h2>PTT Versions</h2>
-            <p className="muted">Manage Permit-to-Transport versions. PTT application records use these versions, but PTT document/type master data is not configured yet.</p>
+            <p className="muted">Manage Permit-to-Transport versions used by PTT application records and rule profiles.</p>
           </div>
         </div>
         <form action={createPttVersionAction} className="inline-edit-form">
@@ -295,6 +299,11 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
         </table>
       </section>
 
+      <PttValidityRulesManager
+        versions={pttVersionContext.versions.map((version) => ({ id: version.id, name: version.name, active: version.active }))}
+        rules={pttValidityRules.map((rule) => ({ versionId: rule.versionId, ...pttValidityRuleConfig(rule) }))}
+        returnTo={returnToPtt}
+      />
       <section className="panel table-wrap">
         <div className="section-heading-row">
           <div>
@@ -309,6 +318,11 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
             {pttVersionContext.activeVersions.map((version) => <option key={version.id} value={version.id}>{version.name}</option>)}
           </select>
           <input name="name" placeholder="Type of transport" required />
+          <select name="capacityCategory" aria-label="Capacity category">
+            <option value="">No capacity category</option>
+            {PTT_VEHICLE_CAPACITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          <input name="maxBoardFeet" type="number" min="0" step="0.01" placeholder="Custom max bd. ft." />
           <SubmitButton pendingText="Adding transport type...">Add Transport Type</SubmitButton>
         </form>
         <table>
@@ -325,6 +339,11 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
                       {pttVersionContext.versions.map((version) => <option key={version.id} value={version.id}>{version.name}{version.active ? "" : " (Archived)"}</option>)}
                     </select>
                     <input name="name" defaultValue={type.name} required />
+                    <select name="capacityCategory" defaultValue={type.capacityCategory || ""} aria-label="Capacity category">
+                      <option value="">No capacity category</option>
+                      {PTT_VEHICLE_CAPACITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                    <input name="maxBoardFeet" type="number" min="0" step="0.01" defaultValue={type.maxBoardFeet === null ? "" : String(type.maxBoardFeet)} placeholder="Custom max bd. ft." aria-label="Custom max board feet" />
                     <SubmitButton className="button secondary" pendingText="Saving...">Save</SubmitButton>
                   </form>
                 </td>

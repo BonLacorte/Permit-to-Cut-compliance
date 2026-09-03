@@ -3,10 +3,11 @@ import Link from "next/link";
 import { PttApplicationsTable } from "@/components/ptt-applications-table";
 import { VersionFilter } from "@/components/version-filter";
 import { requireUser, userHasFeature } from "@/lib/auth";
-import { getOfficeChoices, getPttApplicationRecords, getPttTransportTypes, getVersionContext } from "@/lib/data";
+import { getOfficeChoices, getPttApplicationRecords, getPttTransportTypes, getPttValidityRules, getVersionContext } from "@/lib/data";
 import { decimalOrZero, formatDate, formatValidityDays } from "@/lib/ptc";
 import { formatPttBoolean, PERMIT_GROUP_PTT, pttStatus } from "@/lib/ptt";
 import { pttValidityBasisLabel } from "@/lib/ptt-checks";
+import { pttValidityRuleConfig } from "@/lib/ptt-validity-rules";
 
 function formNumberValue(value: unknown) {
   return value === null || value === undefined ? "" : String(value);
@@ -15,10 +16,11 @@ function formNumberValue(value: unknown) {
 export default async function PttApplicationsPage({ searchParams }: { searchParams?: { version?: string } }) {
   const user = await requireUser();
   const versionContext = await getVersionContext(searchParams?.version, PERMIT_GROUP_PTT);
-  const [records, officeChoices, transportTypes, feesAccess, validityAccess, vehicleAccess] = await Promise.all([
+  const [records, officeChoices, transportTypes, validityRules, feesAccess, validityAccess, vehicleAccess] = await Promise.all([
     getPttApplicationRecords({ versionId: versionContext.selectedVersionId }),
     getOfficeChoices(),
     getPttTransportTypes(),
+    getPttValidityRules(),
     userHasFeature(user, FeatureKey.PTT_FEES_CHECKER),
     userHasFeature(user, FeatureKey.PTT_VALIDITY_CHECKER),
     userHasFeature(user, FeatureKey.PTT_VEHICLE_CAPACITY_CHECKER)
@@ -96,6 +98,7 @@ export default async function PttApplicationsPage({ searchParams }: { searchPara
             provincialOffices: office.provincialOffices.map((provincial) => ({ id: provincial.id, name: provincial.name }))
           }))}
           transportTypes={transportTypes.map((type) => ({ id: type.id, versionId: type.versionId, name: type.name, active: type.active, capacityCategory: type.capacityCategory, maxBoardFeet: type.maxBoardFeet === null ? null : String(type.maxBoardFeet) }))}
+          validityRules={validityRules.map((rule) => ({ versionId: rule.versionId, ...pttValidityRuleConfig(rule) }))}
           versionOptions={versionContext.options}
           selectedVersionParam={versionContext.selectedVersionParam}
         />

@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { VersionOption } from "@/components/document-picker";
 import type { OfficeChoice } from "@/lib/ptc";
-import { PTT_OUTSIDE_REGION_VALIDITY_DAYS, PTT_VALIDITY_BASIS_OPTIONS, PTT_VEHICLE_CAPACITY_OPTIONS, pttCapacityCategoryLabel, pttValidityBasisLabel } from "@/lib/ptt-checks";
+import { DEFAULT_PTT_VALIDITY_RULE_CONFIG, PTT_VEHICLE_CAPACITY_OPTIONS, normalizePttValidityRuleConfig, pttCapacityCategoryLabel, pttOutsideRegionValidityDays, pttValidityBasisLabel, pttValidityBasisOptions, type PttValidityRuleConfig } from "@/lib/ptt-checks";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
+
+export type PttValidityRuleOption = PttValidityRuleConfig & { versionId: string };
 
 export type PttTransportTypeOption = {
   id: string;
@@ -19,6 +21,7 @@ type PttRecordFieldsProps = {
   versionOptions: VersionOption[];
   officeChoices: OfficeChoice[];
   transportTypes: PttTransportTypeOption[];
+  validityRules: PttValidityRuleOption[];
   checkerAccess?: { fees: boolean; validity: boolean; vehicle: boolean };
   onGeneratedFindingsChange?: (findings: string[]) => void;
   defaults?: {
@@ -71,7 +74,7 @@ type ValidityPreview = { actualValidityDays: number; validityBasis: string; basi
 type VehiclePreview = { volumeBoardFeet: number; transportType: string; maxBoardFeet: number | null; withinCapacity: boolean | null; warning: string | null; finding: string | null };
 type AutoCheckStatus = { kind: "idle" | "missing" | "calculating" | "ready" | "error"; message: string };
 
-export function PttRecordFields({ defaults, officeChoices, transportTypes, versionOptions, checkerAccess, onGeneratedFindingsChange }: PttRecordFieldsProps) {
+export function PttRecordFields({ defaults, officeChoices, transportTypes, validityRules, versionOptions, checkerAccess, onGeneratedFindingsChange }: PttRecordFieldsProps) {
   const activeOptions = versionOptions.filter((version) => version.id === UNCATEGORIZED_VERSION || version.active !== false);
   const [versionId, setVersionId] = useState(defaults?.versionId || UNCATEGORIZED_VERSION);
   const [regionalOffice, setRegionalOffice] = useState(defaults?.regionalOffice || "");
@@ -98,6 +101,11 @@ export function PttRecordFields({ defaults, officeChoices, transportTypes, versi
     transportTypes.filter((type) => type.versionId === versionId).map((type) => type.name),
     defaults?.transportType
   );
+  const selectedValidityRule = useMemo(
+    () => normalizePttValidityRuleConfig(validityRules.find((rule) => rule.versionId === versionId) || DEFAULT_PTT_VALIDITY_RULE_CONFIG),
+    [validityRules, versionId]
+  );
+  const outsideValidityDayOptions = useMemo(() => pttOutsideRegionValidityDays(selectedValidityRule), [selectedValidityRule]);
 
   useEffect(() => {
     onGeneratedFindingsChange?.([feePreview?.finding, validityPreview?.finding, vehiclePreview?.finding].filter((finding): finding is string => Boolean(finding)));
@@ -132,7 +140,7 @@ export function PttRecordFields({ defaults, officeChoices, transportTypes, versi
       if ((checkerAccess.fees || checkerAccess.vehicle) && (!volumeText || !Number.isFinite(volume) || volume <= 0)) missing.push("Enter transported volume greater than zero.");
       if (checkerAccess.vehicle && !currentTransportType) missing.push("Choose a Type of Transport Used.");
       if (checkerAccess.validity && !basis) missing.push("Choose a Validity Basis.");
-      if (checkerAccess.validity && basis === "OutsideRegionInterIsland" && !PTT_OUTSIDE_REGION_VALIDITY_DAYS.includes(Number(outsideDays) as 5 | 6 | 7)) missing.push("Choose 5, 6, or 7 days for Outside the Region / Inter-Island.");
+      if (checkerAccess.validity && basis === "OutsideRegionInterIsland" && !outsideValidityDayOptions.includes(Number(outsideDays))) missing.push(`Choose ${outsideValidityDayOptions.join(", ")} days for Outside the Region / Inter-Island.`);
       if (missing.length > 0) {
         resetAutoResult();
         setAutoCheckStatus({ kind: "missing", message: missing.join(" ") });
@@ -208,12 +216,14 @@ export function PttRecordFields({ defaults, officeChoices, transportTypes, versi
       form.removeEventListener("input", schedule);
       form.removeEventListener("change", schedule);
     };
-  }, [checkerAccess?.fees, checkerAccess?.validity, checkerAccess?.vehicle]);
+  }, [checkerAccess?.fees, checkerAccess?.validity, checkerAccess?.vehicle, outsideValidityDayOptions]);
 
   function changeVersion(nextVersionId: string) {
     setVersionId(nextVersionId);
     const nextTypeNames = new Set(transportTypes.filter((type) => type.versionId === nextVersionId).map((type) => type.name));
     if (!nextTypeNames.has(transportType)) setTransportType("");
+    const nextRule = normalizePttValidityRuleConfig(validityRules.find((rule) => rule.versionId === nextVersionId) || DEFAULT_PTT_VALIDITY_RULE_CONFIG);
+    if (!pttOutsideRegionValidityDays(nextRule).includes(Number(outsideRegionValidityDays))) setOutsideRegionValidityDays("");
   }
 
   function changeRegionalOffice(nextRegionalOffice: string) {
@@ -257,10 +267,10 @@ export function PttRecordFields({ defaults, officeChoices, transportTypes, versi
           <div className="field"><label htmlFor="amountPaid">Recorded Fee</label><input id="amountPaid" name="amountPaid" type="number" min="0" step="0.01" defaultValue={numberDefault(defaults?.amountPaid)} /></div>
           <div className="field"><label htmlFor="actualFee">Actual Fee</label><input id="actualFee" name="actualFee" type="number" min="0" step="0.01" defaultValue={numberDefault(defaults?.actualFee)} readOnly={feeApplied} /></div>
           <div className="field"><label htmlFor="officialReceiptNumber">Official Receipt Number</label><input id="officialReceiptNumber" name="officialReceiptNumber" defaultValue={defaults?.officialReceiptNumber || ""} /></div>
-          <div className="field"><label htmlFor="validityBasis">Validity Basis</label><select id="validityBasis" name="validityBasis" value={validityBasis} onChange={(event) => setValidityBasis(event.target.value)}><option value="">Choose validity basis</option>{PTT_VALIDITY_BASIS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+          <div className="field"><label htmlFor="validityBasis">Validity Basis</label><select id="validityBasis" name="validityBasis" value={validityBasis} onChange={(event) => setValidityBasis(event.target.value)}><option value="">Choose validity basis</option>{pttValidityBasisOptions(selectedValidityRule).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
           <div className="field"><label htmlFor="recordedValidityDays">Recorded Validity</label><input id="recordedValidityDays" name="recordedValidityDays" type="number" min="0" step="1" defaultValue={numberDefault(defaults?.recordedValidityDays)} /></div>
           <div className="field"><label htmlFor="actualValidityDays">Actual Validity</label><input id="actualValidityDays" name="actualValidityDays" type="number" min="0" step="1" defaultValue={numberDefault(defaults?.actualValidityDays)} readOnly={validityApplied} /></div>
-          {validityBasis === "OutsideRegionInterIsland" ? <div className="field full-width-field"><label htmlFor="outsideRegionValidityDays">Outside Region / Inter-Island Days</label><select id="outsideRegionValidityDays" name="outsideRegionValidityDays" value={outsideRegionValidityDays} onChange={(event) => setOutsideRegionValidityDays(event.target.value)}><option value="">Choose days</option>{PTT_OUTSIDE_REGION_VALIDITY_DAYS.map((days) => <option key={days} value={days}>{days} days</option>)}</select></div> : null}
+          {validityBasis === "OutsideRegionInterIsland" ? <div className="field full-width-field"><label htmlFor="outsideRegionValidityDays">Outside Region / Inter-Island Days</label><select id="outsideRegionValidityDays" name="outsideRegionValidityDays" value={outsideRegionValidityDays} onChange={(event) => setOutsideRegionValidityDays(event.target.value)}><option value="">Choose days</option>{outsideValidityDayOptions.map((days) => <option key={days} value={days}>{days} days</option>)}</select></div> : null}
           <div className="field"><label htmlFor="dateValidatedInspected">Date Validated/Inspected</label><input id="dateValidatedInspected" name="dateValidatedInspected" type="date" defaultValue={defaults?.dateValidatedInspected || ""} /></div>
           <div className="field"><label htmlFor="validatedInspectedBy">Validated/Inspected By</label><input id="validatedInspectedBy" name="validatedInspectedBy" defaultValue={defaults?.validatedInspectedBy || ""} /></div>
           <div className="field"><label htmlFor="issuedByDate">Issued By Date</label><input id="issuedByDate" name="issuedByDate" type="date" defaultValue={defaults?.issuedByDate || ""} /></div>
@@ -274,7 +284,7 @@ export function PttRecordFields({ defaults, officeChoices, transportTypes, versi
             <div className="section-heading-row"><div><h3>PTT Auto Check</h3><p className="muted">Automatically uses volume, recorded values, validity basis, and mapped transport capacity.</p></div></div>
             {autoCheckStatus.kind === "missing" || autoCheckStatus.kind === "error" ? <p className="error-text" role="alert">{autoCheckStatus.message}</p> : <p className={autoCheckStatus.kind === "ready" ? "success-text" : "muted"}>{autoCheckStatus.message}</p>}
             {feePreview ? <div className="calculation-result"><strong>Actual Fee: {feePreview.actualFee.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong><span>{feePreview.volumeBoardFeet.toLocaleString("en-PH")} bd. ft. x PHP {feePreview.ratePerBoardFoot.toFixed(2)}</span>{feePreview.finding ? <p className="warning-text">{feePreview.finding}</p> : <p className="success-text">Fees match.</p>}</div> : null}
-            {validityPreview ? <div className="calculation-result"><strong>Actual Validity: {validityPreview.actualValidityDays} day{validityPreview.actualValidityDays === 1 ? "" : "s"}</strong><span>{pttValidityBasisLabel(validityPreview.validityBasis)}</span>{validityPreview.finding ? <p className="warning-text">{validityPreview.finding}</p> : <p className="success-text">Validity matches.</p>}</div> : null}
+            {validityPreview ? <div className="calculation-result"><strong>Actual Validity: {validityPreview.actualValidityDays} day{validityPreview.actualValidityDays === 1 ? "" : "s"}</strong><span>{validityPreview.basisLabel || pttValidityBasisLabel(validityPreview.validityBasis, selectedValidityRule)}</span>{validityPreview.finding ? <p className="warning-text">{validityPreview.finding}</p> : <p className="success-text">Validity matches.</p>}</div> : null}
             {vehiclePreview ? <div className="calculation-result"><strong>Vehicle Capacity Check</strong>{vehiclePreview.maxBoardFeet === null ? <p className="warning-text">{vehiclePreview.warning}</p> : <span>Limit: {vehiclePreview.maxBoardFeet.toLocaleString("en-PH")} bd. ft.</span>}{vehiclePreview.finding ? <p className="warning-text">{vehiclePreview.finding}</p> : vehiclePreview.maxBoardFeet !== null ? <p className="success-text">Volume is within the mapped transport capacity.</p> : null}</div> : null}
           </aside>
         </> : null}

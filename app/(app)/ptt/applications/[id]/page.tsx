@@ -4,13 +4,14 @@ import { notFound } from "next/navigation";
 import { EditPttApplicationButton } from "@/components/edit-ptt-application-button";
 import { StatusBadge } from "@/components/status-badge";
 import { requireUser, userHasFeature } from "@/lib/auth";
-import { getOfficeChoices, getPttTransportTypes, getVersionContext } from "@/lib/data";
+import { getOfficeChoices, getPttTransportTypes, getPttValidityRules, getVersionContext } from "@/lib/data";
 import { formatDate, formatFee, formatValidityDays } from "@/lib/ptc";
 import { mergeRemarks } from "@/lib/ptc-checks";
 import { displayPttName, formatPttBoolean, formatPttNumber, PERMIT_GROUP_PTT, pttStatus } from "@/lib/ptt";
 import { pttValidityBasisLabel } from "@/lib/ptt-checks";
 import { prisma } from "@/lib/prisma";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
+import { pttValidityRuleConfig } from "@/lib/ptt-validity-rules";
 
 function metadataValue(value: string) {
   return value || <span className="muted">Blank</span>;
@@ -22,7 +23,7 @@ function formNumberValue(value: unknown) {
 
 export default async function PttApplicationDetailPage({ params }: { params: { id: string } }) {
   const user = await requireUser();
-  const [record, versionContext, officeChoices, transportTypes, feesAccess, validityAccess, vehicleAccess] = await Promise.all([
+  const [record, versionContext, officeChoices, transportTypes, validityRules, feesAccess, validityAccess, vehicleAccess] = await Promise.all([
     prisma.pttApplicationRecord.findUnique({
       where: { id: params.id },
       include: {
@@ -36,6 +37,7 @@ export default async function PttApplicationDetailPage({ params }: { params: { i
     getVersionContext(null, PERMIT_GROUP_PTT),
     getOfficeChoices(),
     getPttTransportTypes(),
+    getPttValidityRules(),
     userHasFeature(user, FeatureKey.PTT_FEES_CHECKER),
     userHasFeature(user, FeatureKey.PTT_VALIDITY_CHECKER),
     userHasFeature(user, FeatureKey.PTT_VEHICLE_CAPACITY_CHECKER)
@@ -97,6 +99,7 @@ export default async function PttApplicationDetailPage({ params }: { params: { i
             provincialOffices: office.provincialOffices.map((provincial) => ({ id: provincial.id, name: provincial.name }))
           }))}
           transportTypes={transportTypes.map((type) => ({ id: type.id, versionId: type.versionId, name: type.name, active: type.active, capacityCategory: type.capacityCategory, maxBoardFeet: type.maxBoardFeet === null ? null : String(type.maxBoardFeet) }))}
+          validityRules={validityRules.map((rule) => ({ versionId: rule.versionId, ...pttValidityRuleConfig(rule) }))}
           versionOptions={versionContext.options}
         />
       </div>

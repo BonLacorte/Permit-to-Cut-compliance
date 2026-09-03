@@ -12,6 +12,7 @@ import { ptcImportCheckContext, pttImportCheckContext } from "@/lib/import-check
 import { PERMIT_GROUP_PTC } from "@/lib/ptc";
 import { PERMIT_GROUP_PTT } from "@/lib/ptt";
 import { calculatePttFee, calculatePttValidity, checkPttVehicleCapacity, pttCapacityMaxFromCategory, pttFeeFinding, pttValidityFinding } from "@/lib/ptt-checks";
+import { defaultPttValidityRuleData, resolvedPttValidityRule } from "@/lib/ptt-validity-rules";
 import { prisma } from "@/lib/prisma";
 import { calculatePtcFee, calculatePtcValidity, feeFinding, normalizePtcCalculationConfig, validityFinding } from "@/lib/ptc-checks";
 import { defaultRuleData, resolvedPtcCalculationRule } from "@/lib/ptc-calculation-rules";
@@ -370,13 +371,14 @@ async function buildPttChecks(formData: FormData, user: { id: string; role: Role
     }
 
     if (applyValidity) {
-      const result = calculatePttValidity({ validityBasis, outsideRegionValidityDays });
+      const validityRule = await resolvedPttValidityRule(versionId);
+      const result = calculatePttValidity({ validityBasis, outsideRegionValidityDays, config: validityRule.config });
       const findingMessage = pttValidityFinding(recordedValidityDays, result);
       data.actualValidityDays = result.actualValidityDays;
       checks.push({
         checkType: PttCheckType.Validity,
         inputSnapshot: { validityBasis, outsideRegionValidityDays, recordedValidityDays },
-        ruleSnapshot: { withinMunicipality: 1, withinProvince: 2, withinRegion: 3, outsideRegionInterIsland: [5, 6, 7] },
+        ruleSnapshot: { id: validityRule.rule?.id ?? null, versionId, ...validityRule.config },
         outputSnapshot: result,
         comparisonSnapshot: { recordedValidityDays, actualValidityDays: result.actualValidityDays, matches: !findingMessage },
         findingMessage
@@ -440,6 +442,17 @@ function pttTransportCapacityData(formData: FormData) {
   return { capacityCategory, maxBoardFeet };
 }
 
+function pttValidityRuleData(formData: FormData) {
+  const withinMunicipalityDays = nullableInt(formData.get("withinMunicipalityDays"));
+  const withinProvinceDays = nullableInt(formData.get("withinProvinceDays"));
+  const withinRegionDays = nullableInt(formData.get("withinRegionDays"));
+  const outsideDays = formData.getAll("outsideRegionAllowedDays").map((value) => nullableInt(value)).filter((value): value is number => value !== null);
+  const outsideRegionAllowedDays = Array.from(new Set(outsideDays)).sort((a, b) => a - b);
+  if (!withinMunicipalityDays || !withinProvinceDays || !withinRegionDays || outsideRegionAllowedDays.length === 0) {
+    throw new Error("Complete every PTT validity rule day value.");
+  }
+  return { withinMunicipalityDays, withinProvinceDays, withinRegionDays, outsideRegionAllowedDays };
+}
 function safeReturnTo(value: FormDataEntryValue | null, fallback: string) {
   const path = String(value || fallback);
   return path.startsWith("/") && !path.startsWith("//") ? path : fallback;
@@ -1167,7 +1180,7 @@ export async function updateUserFeatureAccessAction(formData: FormData) {
   if (!userId) redirectWithToast("/admin/users", "error", "User id is required.");
   const target = await prisma.user.findUnique({ where: { id: userId } });
   if (!target) redirectWithToast("/admin/users", "error", "User was not found.");
-  if (target.role !== Role.ADMIN) redirectWithToast("/admin/users", "error", "Feature access can only be assigned to Admin accounts.");
+  if (target.role !== Role.ADMIN && target.role !== Role.STAFF) redirectWithToast("/admin/users", "error", "Feature access can only be assigned to Admin or Staff accounts.");
   const features = [
     ...(formData.get("ptcFeesChecker") === "on" ? [FeatureKey.PTC_FEES_CHECKER] : []),
     ...(formData.get("ptcValidityChecker") === "on" ? [FeatureKey.PTC_VALIDITY_CHECKER] : []),
@@ -1431,10 +1444,15 @@ export async function createPttVersionAction(formData: FormData) {
 
   try {
     const count = await prisma.ptcVersion.count({ where: { group: PERMIT_GROUP_PTT } });
-    await prisma.ptcVersion.upsert({
+    const version = await prisma.ptcVersion.upsert({
       where: { group_name: { group: PERMIT_GROUP_PTT, name } },
       update: { active: true, description },
       create: { group: PERMIT_GROUP_PTT, name, description, sortOrder: count + 1 }
+    });
+    await prisma.pttValidityRule.upsert({
+      where: { versionId: version.id },
+      update: {},
+      create: { versionId: version.id, ...defaultPttValidityRuleData() }
     });
   } catch {
     redirectWithToast(returnTo, "error", "Could not create the PTT Version. The name may already exist.");
@@ -1544,6 +1562,28 @@ export async function deletePttTransportTypeAction(formData: FormData) {
 
   revalidatePttApplications();
   redirectWithToast(returnTo, "success", "PTT transport type deleted.");
+}
+export async function savePttValidityRuleAction(formData: FormData) {
+  await requireAdmin();
+  const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=ptt");
+  const versionId = String(formData.get("versionId") || "");
+  if (!versionId) redirectWithToast(returnTo, "error", "PTT Version is required.");
+
+  try {
+    const version = await prisma.ptcVersion.findFirst({ where: { id: versionId, group: PERMIT_GROUP_PTT } });
+    if (!version) redirectWithToast(returnTo, "error", "Selected PTT Version was not found.");
+    await prisma.pttValidityRule.upsert({
+      where: { versionId },
+      update: pttValidityRuleData(formData),
+      create: { versionId, ...pttValidityRuleData(formData) }
+    });
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    redirectWithToast(returnTo, "error", error instanceof Error ? error.message : "Could not save PTT validity rules.");
+  }
+
+  revalidatePath("/admin/master-data");
+  redirectWithToast(returnTo, "success", "PTT validity rules saved.");
 }
 export async function createApplicationTypeAction(formData: FormData) {
   await requireAdmin();

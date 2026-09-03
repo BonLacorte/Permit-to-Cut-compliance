@@ -2,7 +2,8 @@ import { FeatureKey } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getCurrentUser, userHasFeature } from "@/lib/auth";
 import { PERMIT_GROUP_PTT } from "@/lib/ptt";
-import { calculatePttFee, calculatePttValidity, checkPttVehicleCapacity, pttCapacityMaxFromCategory, pttFeeFinding, pttValidityFinding } from "@/lib/ptt-checks";
+import { calculatePttFee, calculatePttValidity, checkPttVehicleCapacity, pttCapacityMaxFromCategory, pttFeeFinding, pttValidityBasisLabel, pttValidityFinding } from "@/lib/ptt-checks";
+import { resolvedPttValidityRule } from "@/lib/ptt-validity-rules";
 import { prisma } from "@/lib/prisma";
 
 function optionalNumber(value: unknown) {
@@ -55,9 +56,10 @@ export async function POST(request: Request) {
       response.fee = { ...result, finding: pttFeeFinding(recordedFee, result.actualFee) };
     }
     if (checkValidity) {
-      const result = calculatePttValidity({ validityBasis: validBasis(body.validityBasis), outsideRegionValidityDays: optionalInt(body.outsideRegionValidityDays) });
+      const validityRule = await resolvedPttValidityRule(versionId);
+      const result = calculatePttValidity({ validityBasis: validBasis(body.validityBasis), outsideRegionValidityDays: optionalInt(body.outsideRegionValidityDays), config: validityRule.config });
       const recordedValidityDays = optionalInt(body.recordedValidityDays);
-      response.validity = { ...result, finding: pttValidityFinding(recordedValidityDays, result) };
+      response.validity = { ...result, basisLabel: pttValidityBasisLabel(result.validityBasis, validityRule.config), finding: pttValidityFinding(recordedValidityDays, result) };
     }
     if (checkVehicle) {
       const transportType = optionalText(body.transportType);

@@ -1,15 +1,17 @@
 import { FeatureKey } from "@prisma/client";
 import { NewPttApplicationForm } from "@/components/new-ptt-application-form";
 import { requireUser, userHasFeature } from "@/lib/auth";
-import { getOfficeChoices, getPttTransportTypes, getVersionContext } from "@/lib/data";
+import { getOfficeChoices, getPttTransportTypes, getPttValidityRules, getVersionContext } from "@/lib/data";
 import { PERMIT_GROUP_PTT } from "@/lib/ptt";
+import { pttValidityRuleConfig } from "@/lib/ptt-validity-rules";
 
 export default async function NewPttApplicationPage({ searchParams }: { searchParams?: { version?: string } }) {
   const user = await requireUser();
-  const [versionContext, officeChoices, transportTypes, feesAccess, validityAccess, vehicleAccess] = await Promise.all([
+  const [versionContext, officeChoices, transportTypes, validityRules, feesAccess, validityAccess, vehicleAccess] = await Promise.all([
     getVersionContext(searchParams?.version, PERMIT_GROUP_PTT),
     getOfficeChoices(),
     getPttTransportTypes(),
+    getPttValidityRules(),
     userHasFeature(user, FeatureKey.PTT_FEES_CHECKER),
     userHasFeature(user, FeatureKey.PTT_VALIDITY_CHECKER),
     userHasFeature(user, FeatureKey.PTT_VEHICLE_CAPACITY_CHECKER)
@@ -37,6 +39,7 @@ export default async function NewPttApplicationPage({ searchParams }: { searchPa
             capacityCategory: type.capacityCategory,
             maxBoardFeet: type.maxBoardFeet === null ? null : String(type.maxBoardFeet)
           }))}
+          validityRules={validityRules.map((rule) => ({ versionId: rule.versionId, ...pttValidityRuleConfig(rule) }))}
           initialVersionId={versionContext.selectedVersionId}
           checkerAccess={{ fees: feesAccess, validity: validityAccess, vehicle: vehicleAccess }}
         />

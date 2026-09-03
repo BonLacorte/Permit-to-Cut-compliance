@@ -3,16 +3,17 @@
 import { FormEvent, useMemo, useRef, useState } from "react";
 import { createPttApplicationRecordAction } from "@/app/actions";
 import type { VersionOption } from "@/components/document-picker";
-import { PttRecordFields, type PttTransportTypeOption } from "@/components/ptt-record-fields";
+import { PttRecordFields, type PttTransportTypeOption, type PttValidityRuleOption } from "@/components/ptt-record-fields";
 import { SubmitButton } from "@/components/submit-button";
 import type { OfficeChoice } from "@/lib/ptc";
 import { mergeRemarks } from "@/lib/ptc-checks";
 
-export function NewPttApplicationForm({ checkerAccess, initialVersionId, officeChoices, transportTypes, versionOptions }: {
+export function NewPttApplicationForm({ checkerAccess, initialVersionId, officeChoices, transportTypes, validityRules, versionOptions }: {
   checkerAccess: { fees: boolean; validity: boolean; vehicle: boolean };
   initialVersionId: string | null;
   officeChoices: OfficeChoice[];
   transportTypes: PttTransportTypeOption[];
+  validityRules: PttValidityRuleOption[];
   versionOptions: VersionOption[];
 }) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -49,6 +50,7 @@ export function NewPttApplicationForm({ checkerAccess, initialVersionId, officeC
         versionOptions={versionOptions}
         officeChoices={officeChoices}
         transportTypes={transportTypes}
+        validityRules={validityRules}
         defaults={{ versionId: initialVersionId }}
         checkerAccess={checkerAccess}
         onGeneratedFindingsChange={setFindings}

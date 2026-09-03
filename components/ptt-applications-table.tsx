@@ -3,7 +3,7 @@
 import { FormEvent, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { deletePttApplicationRecordAction, updatePttApplicationRecordAction } from "@/app/actions";
-import { PttRecordFields, type PttTransportTypeOption } from "@/components/ptt-record-fields";
+import { PttRecordFields, type PttTransportTypeOption, type PttValidityRuleOption } from "@/components/ptt-record-fields";
 import { StatusBadge } from "@/components/status-badge";
 import { SubmitButton } from "@/components/submit-button";
 import type { VersionOption } from "@/components/document-picker";
@@ -89,6 +89,7 @@ export function PttApplicationsTable({
   rows,
   officeChoices,
   transportTypes,
+  validityRules,
   versionOptions,
   selectedVersionParam
 }: {
@@ -96,6 +97,7 @@ export function PttApplicationsTable({
   rows: Row[];
   officeChoices: OfficeChoice[];
   transportTypes: PttTransportTypeOption[];
+  validityRules: PttValidityRuleOption[];
   versionOptions: VersionOption[];
   selectedVersionParam: string;
 }) {
@@ -280,7 +282,7 @@ export function PttApplicationsTable({
               <input type="hidden" name="id" value={editing.id} />
               <input type="hidden" name="returnTo" value={`/ptt/applications?version=${selectedVersionParam}`} />
               <div className="field"><label>Name</label><input name="transporterName" defaultValue={editing.transporterName} /></div>
-              <PttRecordFields defaults={editing} officeChoices={officeChoices} transportTypes={transportTypes} versionOptions={versionOptions} checkerAccess={checkerAccess} onGeneratedFindingsChange={setFindings} />
+              <PttRecordFields defaults={editing} officeChoices={officeChoices} transportTypes={transportTypes} validityRules={validityRules} versionOptions={versionOptions} checkerAccess={checkerAccess} onGeneratedFindingsChange={setFindings} />
               <div className="field"><label>Remarks</label><textarea name="remarks" value={manualRemarks} onChange={(event) => setManualRemarks(event.target.value)} rows={4} /></div>
               <div className="actions"><SubmitButton pendingText="Saving changes...">Save Changes</SubmitButton><button className="button secondary" type="button" onClick={() => setEditing(null)}>Cancel</button></div>
             </form>

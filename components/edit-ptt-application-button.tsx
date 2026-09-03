@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useRef, useState } from "react";
 import { updatePttApplicationRecordAction } from "@/app/actions";
-import { PttRecordFields, type PttTransportTypeOption } from "@/components/ptt-record-fields";
+import { PttRecordFields, type PttTransportTypeOption, type PttValidityRuleOption } from "@/components/ptt-record-fields";
 import { SubmitButton } from "@/components/submit-button";
 import type { VersionOption } from "@/components/document-picker";
 import type { OfficeChoice } from "@/lib/ptc";
@@ -51,12 +51,14 @@ export function EditPttApplicationButton({
   record,
   officeChoices,
   transportTypes,
+  validityRules,
   versionOptions
 }: {
   checkerAccess: { fees: boolean; validity: boolean; vehicle: boolean };
   record: RecordDetails;
   officeChoices: OfficeChoice[];
   transportTypes: PttTransportTypeOption[];
+  validityRules: PttValidityRuleOption[];
   versionOptions: VersionOption[];
 }) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -100,7 +102,7 @@ export function EditPttApplicationButton({
                 <label>Name</label>
                 <input name="transporterName" defaultValue={record.transporterName} />
               </div>
-              <PttRecordFields defaults={record} officeChoices={officeChoices} transportTypes={transportTypes} versionOptions={versionOptions} checkerAccess={checkerAccess} onGeneratedFindingsChange={setFindings} />
+              <PttRecordFields defaults={record} officeChoices={officeChoices} transportTypes={transportTypes} validityRules={validityRules} versionOptions={versionOptions} checkerAccess={checkerAccess} onGeneratedFindingsChange={setFindings} />
               <div className="field">
                 <label>Remarks</label>
                 <textarea name="remarks" value={manualRemarks} onChange={(event) => setManualRemarks(event.target.value)} rows={4} />

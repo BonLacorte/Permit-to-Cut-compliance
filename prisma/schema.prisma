@@ -60,17 +60,17 @@ enum DocumentRequirementMode {
 }
 
 model User {
-  id               String                 @id @default(cuid())
+  id               String                   @id @default(cuid())
   name             String
-  email            String                 @unique
+  email            String                   @unique
   passwordHash     String
-  role             Role                   @default(STAFF)
-  createdAt        DateTime               @default(now())
-  updatedAt        DateTime               @updatedAt
-  records          ApplicationRecord[]    @relation("CreatedRecords")
-  editedRecords    ApplicationRecord[]    @relation("EditedRecords")
-  pttRecords       PttApplicationRecord[] @relation("CreatedPttRecords")
-  editedPttRecords PttApplicationRecord[] @relation("EditedPttRecords")
+  role             Role                     @default(STAFF)
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  records          ApplicationRecord[]      @relation("CreatedRecords")
+  editedRecords    ApplicationRecord[]      @relation("EditedRecords")
+  pttRecords       PttApplicationRecord[]   @relation("CreatedPttRecords")
+  editedPttRecords PttApplicationRecord[]   @relation("EditedPttRecords")
   progress         ProgressEntry[]
   activity         ActivityLog[]
   featureAccess    UserFeatureAccess[]
@@ -105,23 +105,24 @@ model PtcVersion {
   pttRecords        PttApplicationRecord[]
   pttTransportTypes PttTransportType[]
   calculationRules  PtcCalculationRule[]
+  pttValidityRule   PttValidityRule?
 
   @@unique([group, name])
   @@map("ptc_versions")
 }
 
 model ApplicationType {
-  id        String              @id @default(cuid())
-  group     String              @default("PTC")
-  versionId String
-  name      String
-  active    Boolean             @default(true)
-  sortOrder Int                 @default(0)
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
-  version   PtcVersion          @relation(fields: [versionId], references: [id])
-  documents RequiredDocument[]
-  records   ApplicationRecord[]
+  id               String               @id @default(cuid())
+  group            String               @default("PTC")
+  versionId        String
+  name             String
+  active           Boolean              @default(true)
+  sortOrder        Int                  @default(0)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  version          PtcVersion           @relation(fields: [versionId], references: [id])
+  documents        RequiredDocument[]
+  records          ApplicationRecord[]
   calculationRules PtcCalculationRule[]
 
   @@unique([versionId, name])
@@ -174,43 +175,43 @@ model ProvincialOffice {
 }
 
 model ApplicationRecord {
-  id                   String             @id @default(cuid())
-  group                String             @default("PTC")
-  versionId            String?
-  applicantName        String?
-  applicationTypeId    String?
-  remarks              String?
-  ptcNumber            String?
-  dateIssued           DateTime?
-  regionalOffice       String?
-  provincialOffice     String?
-  municipality         String?
-  barangay             String?
-  treesApplied         Int?
-  treesApproved        Int?
-  seedlingsReplacement Int?
-  recordedValidityDays Int?
-  actualValidityDays   Int?
-  actualFee            Decimal?           @db.Decimal(12, 2)
-  recordedFee          Decimal?           @db.Decimal(12, 2)
+  id                    String                    @id @default(cuid())
+  group                 String                    @default("PTC")
+  versionId             String?
+  applicantName         String?
+  applicationTypeId     String?
+  remarks               String?
+  ptcNumber             String?
+  dateIssued            DateTime?
+  regionalOffice        String?
+  provincialOffice      String?
+  municipality          String?
+  barangay              String?
+  treesApplied          Int?
+  treesApproved         Int?
+  seedlingsReplacement  Int?
+  recordedValidityDays  Int?
+  actualValidityDays    Int?
+  actualFee             Decimal?                  @db.Decimal(12, 2)
+  recordedFee           Decimal?                  @db.Decimal(12, 2)
   officialReceiptNumber String?
-  replantedSeedlings   Boolean?
-  locExemption         LocExemption?
-  agriculturist        String?
-  recommendingApproval String?
-  approved             String?
-  createdById          String
-  editedById           String?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-  version              PtcVersion?        @relation(fields: [versionId], references: [id])
-  applicationType      ApplicationType?   @relation(fields: [applicationTypeId], references: [id])
-  createdBy            User               @relation("CreatedRecords", fields: [createdById], references: [id])
-  editedBy             User?              @relation("EditedRecords", fields: [editedById], references: [id])
-  progressEntries      ProgressEntry[]
-  progressDocuments    ProgressDocument[]
-  checkRuns            ApplicationCheckRun[]
-  checkFindings        ApplicationCheckFinding[]
+  replantedSeedlings    Boolean?
+  locExemption          LocExemption?
+  agriculturist         String?
+  recommendingApproval  String?
+  approved              String?
+  createdById           String
+  editedById            String?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  version               PtcVersion?               @relation(fields: [versionId], references: [id])
+  applicationType       ApplicationType?          @relation(fields: [applicationTypeId], references: [id])
+  createdBy             User                      @relation("CreatedRecords", fields: [createdById], references: [id])
+  editedBy              User?                     @relation("EditedRecords", fields: [editedById], references: [id])
+  progressEntries       ProgressEntry[]
+  progressDocuments     ProgressDocument[]
+  checkRuns             ApplicationCheckRun[]
+  checkFindings         ApplicationCheckFinding[]
 
   @@index([applicationTypeId])
   @@index([versionId])
@@ -221,20 +222,20 @@ model ApplicationRecord {
 }
 
 model PtcCalculationRule {
-  id                         String           @id @default(cuid())
-  versionId                  String
-  applicationTypeId          String?
-  processingTiers            Json
-  additionalProcessingStep   Int              @default(50)
-  additionalProcessingFee    Decimal          @default(200) @db.Decimal(12, 2)
-  applicationFeePerTree      Decimal          @default(100) @db.Decimal(12, 2)
-  replantingFeePerTree       Decimal          @default(100) @db.Decimal(12, 2)
-  maxTreesPerPtc             Int              @default(100)
-  validityBrackets           Json
-  createdAt                  DateTime         @default(now())
-  updatedAt                  DateTime         @updatedAt
-  version                    PtcVersion       @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  applicationType            ApplicationType? @relation(fields: [applicationTypeId], references: [id], onDelete: Cascade)
+  id                       String           @id @default(cuid())
+  versionId                String
+  applicationTypeId        String?
+  processingTiers          Json
+  additionalProcessingStep Int              @default(50)
+  additionalProcessingFee  Decimal          @default(200) @db.Decimal(12, 2)
+  applicationFeePerTree    Decimal          @default(100) @db.Decimal(12, 2)
+  replantingFeePerTree     Decimal          @default(100) @db.Decimal(12, 2)
+  maxTreesPerPtc           Int              @default(100)
+  validityBrackets         Json
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+  version                  PtcVersion       @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  applicationType          ApplicationType? @relation(fields: [applicationTypeId], references: [id], onDelete: Cascade)
 
   @@unique([versionId, applicationTypeId])
   @@index([versionId])
@@ -323,8 +324,8 @@ model ActivityLog {
 }
 
 model PttApplicationRecord {
-  id                                  String      @id @default(cuid())
-  group                               String      @default("PTT")
+  id                                  String                       @id @default(cuid())
+  group                               String                       @default("PTT")
   versionId                           String?
   pttNumber                           String?
   dateIssued                          DateTime?
@@ -336,9 +337,9 @@ model PttApplicationRecord {
   pcaRegistrationCertificateNumber    String?
   pcaRegistrationCertificateDate      DateTime?
   businessAddress                     String?
-  boardFeetGranted                    Decimal?    @db.Decimal(12, 2)
+  boardFeetGranted                    Decimal?                     @db.Decimal(12, 2)
   certificateOfQuantityVolumeAttached Boolean?
-  volumeBoardFeet                     Decimal?    @db.Decimal(12, 2)
+  volumeBoardFeet                     Decimal?                     @db.Decimal(12, 2)
   originOfLumber                      String?
   destination                         String?
   consigneeName                       String?
@@ -347,8 +348,8 @@ model PttApplicationRecord {
   vehiclePlateNumber                  String?
   authorizedDriverName                String?
   authorizedDriverContact             String?
-  amountPaid                          Decimal?    @db.Decimal(12, 2)
-  actualFee                           Decimal?    @db.Decimal(12, 2)
+  amountPaid                          Decimal?                     @db.Decimal(12, 2)
+  actualFee                           Decimal?                     @db.Decimal(12, 2)
   officialReceiptNumber               String?
   recordedValidityDays                Int?
   actualValidityDays                  Int?
@@ -361,11 +362,11 @@ model PttApplicationRecord {
   remarks                             String?
   createdById                         String
   editedById                          String?
-  createdAt                           DateTime    @default(now())
-  updatedAt                           DateTime    @updatedAt
-  version                             PtcVersion? @relation(fields: [versionId], references: [id])
-  createdBy                           User        @relation("CreatedPttRecords", fields: [createdById], references: [id])
-  editedBy                            User?       @relation("EditedPttRecords", fields: [editedById], references: [id])
+  createdAt                           DateTime                     @default(now())
+  updatedAt                           DateTime                     @updatedAt
+  version                             PtcVersion?                  @relation(fields: [versionId], references: [id])
+  createdBy                           User                         @relation("CreatedPttRecords", fields: [createdById], references: [id])
+  editedBy                            User?                        @relation("EditedPttRecords", fields: [editedById], references: [id])
   checkRuns                           PttApplicationCheckRun[]
   checkFindings                       PttApplicationCheckFinding[]
 
@@ -394,6 +395,21 @@ model PttTransportType {
   @@index([group])
   @@index([versionId])
   @@map("ptt_transport_types")
+}
+
+model PttValidityRule {
+  id                       String     @id @default(cuid())
+  versionId                String     @unique
+  withinMunicipalityDays   Int        @default(1)
+  withinProvinceDays       Int        @default(2)
+  withinRegionDays         Int        @default(3)
+  outsideRegionAllowedDays Json
+  createdAt                DateTime   @default(now())
+  updatedAt                DateTime   @updatedAt
+  version                  PtcVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([versionId])
+  @@map("ptt_validity_rules")
 }
 
 model PttApplicationCheckRun {
