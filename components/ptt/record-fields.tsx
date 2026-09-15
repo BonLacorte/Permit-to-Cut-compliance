@@ -8,6 +8,7 @@ import type { VersionOption } from "@/components/ptc/document-picker";
 import type { OfficeChoice } from "@/lib/ptc";
 import { DEFAULT_PTT_VALIDITY_RULE_CONFIG, PTT_VEHICLE_CAPACITY_OPTIONS, normalizePttValidityRuleConfig, pttCapacityCategoryLabel, pttOutsideRegionValidityDays, pttValidityBasisLabel, pttValidityBasisOptions, type PttValidityRuleConfig } from "@/lib/ptt-checks";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
+import { pttSignatureMessages } from "@/lib/signatures";
 
 export type PttValidityRuleOption = PttValidityRuleConfig & { versionId: string };
 
@@ -93,7 +94,21 @@ type ValidityPreview = { actualValidityDays: number; validityBasis: string; basi
 type VehiclePreview = { volumeBoardFeet: number; transportType: string; actualTransportCategory: string | null; actualTransportLabel: string; actualTransportMaxBoardFeet: number | null; maxBoardFeet: number | null; withinCapacity: boolean | null; warning: string | null; finding: string | null };
 type AutoCheckStatus = { kind: "idle" | "missing" | "calculating" | "ready" | "error"; message: string };
 
+const PTT_SIGNATURE_FIELD_NAMES = new Set([
+  "validatedInspectedBy",
+  "validatedInspectedBySignatureStatus",
+  "validatedInspectedBySignatureForName",
+  "issuedBy",
+  "issuedBySignatureStatus",
+  "issuedBySignatureForName"
+]);
+
+function sameFindings(current: string[], next: string[]) {
+  return current.length === next.length && current.every((finding, index) => finding === next[index]);
+}
+
 export function PttRecordFields({ defaults, officeChoices, transportTypes, validityRules, versionOptions, checkerAccess, onGeneratedFindingsChange }: PttRecordFieldsProps) {
+  const hasCalculationChecks = Boolean(checkerAccess?.fees || checkerAccess?.validity || checkerAccess?.vehicle);
   const activeOptions = versionOptions.filter((version) => version.id === UNCATEGORIZED_VERSION || version.active !== false);
   const initialVersionId = defaults?.versionId || UNCATEGORIZED_VERSION;
   const initialTransportType = defaults?.transportType || "";
@@ -115,8 +130,10 @@ export function PttRecordFields({ defaults, officeChoices, transportTypes, valid
   const [feePreview, setFeePreview] = useState<FeePreview | null>(null);
   const [validityPreview, setValidityPreview] = useState<ValidityPreview | null>(null);
   const [vehiclePreview, setVehiclePreview] = useState<VehiclePreview | null>(null);
+  const [signatureFindings, setSignatureFindings] = useState<string[]>([]);
   const [autoCheckStatus, setAutoCheckStatus] = useState<AutoCheckStatus>({ kind: "idle", message: "Fill out checker inputs to start the automatic PTT check." });
   const autoCheckHostRef = useRef<HTMLDivElement | null>(null);
+  const signatureFieldsRef = useRef<HTMLElement | null>(null);
   const requestIdRef = useRef(0);
 
   const provincialOffices = useMemo(
@@ -139,8 +156,38 @@ export function PttRecordFields({ defaults, officeChoices, transportTypes, valid
   const outsideValidityDayOptions = useMemo(() => pttOutsideRegionValidityDays(selectedValidityRule), [selectedValidityRule]);
 
   useEffect(() => {
-    onGeneratedFindingsChange?.([feePreview?.finding, validityPreview?.finding, vehiclePreview?.finding].filter((finding): finding is string => Boolean(finding)));
-  }, [feePreview, validityPreview, vehiclePreview, onGeneratedFindingsChange]);
+    onGeneratedFindingsChange?.([feePreview?.finding, validityPreview?.finding, vehiclePreview?.finding, ...signatureFindings].filter((finding): finding is string => Boolean(finding)));
+  }, [feePreview, validityPreview, vehiclePreview, signatureFindings, onGeneratedFindingsChange]);
+
+  useEffect(() => {
+    const form = signatureFieldsRef.current?.closest("form");
+    if (!form) return;
+    const updateSignatureFindings = () => {
+      const data = new FormData(form);
+      const nextFindings = pttSignatureMessages({
+        validatedInspectedBy: data.get("validatedInspectedBy")?.toString(),
+        validatedInspectedBySignatureStatus: data.get("validatedInspectedBySignatureStatus")?.toString(),
+        validatedInspectedBySignatureForName: data.get("validatedInspectedBySignatureForName")?.toString(),
+        issuedBy: data.get("issuedBy")?.toString(),
+        issuedBySignatureStatus: data.get("issuedBySignatureStatus")?.toString(),
+        issuedBySignatureForName: data.get("issuedBySignatureForName")?.toString()
+      });
+      setSignatureFindings((current) => sameFindings(current, nextFindings) ? current : nextFindings);
+    };
+    const updateForSignatureField = (event: Event) => {
+      const target = event.target;
+      if ((target instanceof HTMLInputElement || target instanceof HTMLSelectElement) && PTT_SIGNATURE_FIELD_NAMES.has(target.name)) {
+        updateSignatureFindings();
+      }
+    };
+    updateSignatureFindings();
+    form.addEventListener("input", updateForSignatureField);
+    form.addEventListener("change", updateForSignatureField);
+    return () => {
+      form.removeEventListener("input", updateForSignatureField);
+      form.removeEventListener("change", updateForSignatureField);
+    };
+  }, []);
 
   useEffect(() => {
     if (!checkerAccess?.fees && !checkerAccess?.validity && !checkerAccess?.vehicle) return;
@@ -275,7 +322,7 @@ export function PttRecordFields({ defaults, officeChoices, transportTypes, valid
         </select>
       </div>
 
-      <section className="form-section">
+      <section ref={signatureFieldsRef} className="form-section">
         <h3>PTT Details</h3>
         <div className="grid cols-2">
           <div className="field"><label htmlFor="dateIssued">Date Issued</label><input id="dateIssued" name="dateIssued" type="date" defaultValue={defaults?.dateIssued || ""} /></div>
@@ -308,22 +355,25 @@ export function PttRecordFields({ defaults, officeChoices, transportTypes, valid
           <div className="field"><label htmlFor="dateValidatedInspected">Date Validated/Inspected</label><input id="dateValidatedInspected" name="dateValidatedInspected" type="date" defaultValue={defaults?.dateValidatedInspected || ""} /></div>
           <div className="field"><label htmlFor="issuedByDate">Issued By Date</label><input id="issuedByDate" name="issuedByDate" type="date" defaultValue={defaults?.issuedByDate || ""} /></div>
           <div className="field"><label htmlFor="validatedInspectedBy">Validated/Inspected By</label><input id="validatedInspectedBy" name="validatedInspectedBy" defaultValue={defaults?.validatedInspectedBy || ""} /></div>
-          <SignatureFieldGroup label="Validated/Inspected By Signature" statusName="validatedInspectedBySignatureStatus" forNameName="validatedInspectedBySignatureForName" defaultStatus={defaults?.validatedInspectedBySignatureStatus} defaultForName={defaults?.validatedInspectedBySignatureForName} fallbackLabel="Issued By" />
           <div className="field"><label htmlFor="issuedBy">Issued By</label><input id="issuedBy" name="issuedBy" defaultValue={defaults?.issuedBy || ""} /></div>
+          <SignatureFieldGroup label="Validated/Inspected By Signature" statusName="validatedInspectedBySignatureStatus" forNameName="validatedInspectedBySignatureForName" defaultStatus={defaults?.validatedInspectedBySignatureStatus} defaultForName={defaults?.validatedInspectedBySignatureForName} fallbackLabel="Issued By" />
           <SignatureFieldGroup label="Issued By Signature" statusName="issuedBySignatureStatus" forNameName="issuedBySignatureForName" defaultStatus={defaults?.issuedBySignatureStatus} defaultForName={defaults?.issuedBySignatureForName} fallbackLabel="Validated/Inspected By" />
         </div>
-        {checkerAccess?.fees || checkerAccess?.validity || checkerAccess?.vehicle ? <>
+        {hasCalculationChecks ? <>
           <input type="hidden" name="applyPttFeeCheck" value={feeApplied ? "true" : "false"} />
           <input type="hidden" name="applyPttValidityCheck" value={validityApplied ? "true" : "false"} />
           <input type="hidden" name="applyPttVehicleCheck" value={vehicleApplied ? "true" : "false"} />
-          <aside ref={autoCheckHostRef} className="form-section calculation-panel">
-            <div className="section-heading-row"><div><h3>PTT Auto Check</h3><p className="muted">Automatically uses volume, recorded values, validity basis, and mapped transport capacity.</p></div></div>
+        </> : null}
+        <aside ref={autoCheckHostRef} className="form-section calculation-panel">
+          <div className="section-heading-row"><div><h3>PTT Auto Check</h3><p className="muted">Checks volume, recorded values, validity basis, mapped transport capacity, and signatures.</p></div></div>
+          {hasCalculationChecks ? <>
             {autoCheckStatus.kind === "missing" || autoCheckStatus.kind === "error" ? <p className="error-text" role="alert">{autoCheckStatus.message}</p> : <p className={autoCheckStatus.kind === "ready" ? "success-text" : "muted"}>{autoCheckStatus.message}</p>}
             {feePreview ? <div className="calculation-result"><strong>Actual Fee: {feePreview.actualFee.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong><span>{feePreview.volumeBoardFeet.toLocaleString("en-PH")} bd. ft. x PHP {feePreview.ratePerBoardFoot.toFixed(2)}</span>{feePreview.finding ? <p className="warning-text">{feePreview.finding}</p> : <p className="success-text">Fees match.</p>}</div> : null}
             {validityPreview ? <div className="calculation-result"><strong>Actual Validity: {validityPreview.actualValidityDays} day{validityPreview.actualValidityDays === 1 ? "" : "s"}</strong><span>{validityPreview.basisLabel || pttValidityBasisLabel(validityPreview.validityBasis, selectedValidityRule)}</span>{validityPreview.finding ? <p className="warning-text">{validityPreview.finding}</p> : <p className="success-text">Validity matches.</p>}</div> : null}
             {vehiclePreview ? <div className="calculation-result"><strong>Vehicle Capacity Check</strong><span>Actual type: {vehiclePreview.actualTransportLabel}</span>{vehiclePreview.maxBoardFeet === null ? <p className="warning-text">{vehiclePreview.warning}</p> : <span>Recorded limit: {vehiclePreview.maxBoardFeet.toLocaleString("en-PH")} bd. ft.</span>}{vehiclePreview.finding ? <p className="warning-text">{vehiclePreview.finding}</p> : vehiclePreview.maxBoardFeet !== null ? <p className="success-text">Recorded transport capacity covers the volume.</p> : null}</div> : null}
-          </aside>
-        </> : null}
+          </> : null}
+          <div className="calculation-result"><strong>Signature Check</strong>{signatureFindings.length > 0 ? signatureFindings.map((finding) => <p className="warning-text" key={finding}>{finding}</p>) : <p className="success-text">Validated/Inspected By and Issued By signatures are signed.</p>}</div>
+        </aside>
       </section>
     </>
   );

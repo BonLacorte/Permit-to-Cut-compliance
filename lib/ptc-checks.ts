@@ -121,8 +121,43 @@ export function validityFinding(recordedValidityDays: number | null | undefined,
   return findings.length > 0 ? findings.join(" ") : null;
 }
 
+function remarkBlocks(value: string | null | undefined) {
+  return String(value || "")
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+}
+
+function isSignatureRemark(block: string) {
+  const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+  return lines.length > 0 && lines.every((line) =>
+    /^There's no signature in (Recommending Approval|Approved|Validated\/Inspected By|Issued By) field\.$/.test(line)
+    || /^The signature in (Recommending Approval|Approved|Validated\/Inspected By|Issued By) field was signed ['‘]For['’] by .+ on behalf of the authorized signatory\.$/.test(line)
+  );
+}
+
 export function mergeRemarks(manualRemarks: string | null | undefined, findings: Array<string | null | undefined>) {
-  return [manualRemarks?.trim(), ...findings.map((finding) => finding?.trim()).filter(Boolean)].filter(Boolean).join("\n\n");
+  const seen = new Set<string>();
+  return [manualRemarks, ...findings]
+    .flatMap((value) => remarkBlocks(value))
+    .filter((block) => {
+      if (seen.has(block)) return false;
+      seen.add(block);
+      return true;
+    })
+    .join("\n\n");
+}
+
+export function replaceGeneratedRemarks(
+  existingRemarks: string | null | undefined,
+  previousFindings: Array<string | null | undefined>,
+  currentFindings: Array<string | null | undefined>
+) {
+  const previous = new Set(previousFindings.flatMap((finding) => remarkBlocks(finding)));
+  const manualRemarks = remarkBlocks(existingRemarks)
+    .filter((block) => !previous.has(block) && !isSignatureRemark(block))
+    .join("\n\n");
+  return mergeRemarks(manualRemarks, currentFindings);
 }
 
 export function formatNumber(value: number) {

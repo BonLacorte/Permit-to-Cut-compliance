@@ -17,6 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { calculatePtcFee, calculatePtcValidity, feeFinding, normalizePtcCalculationConfig, validityFinding } from "@/lib/ptc-checks";
 import { defaultRuleData, resolvedPtcCalculationRule } from "@/lib/ptc-calculation-rules";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
+import { mergeRemarks, replaceGeneratedRemarks } from "@/lib/ptc-checks";
 
 import { createRecordSchema, updateRecordSchema, progressSchema, createPttRecordSchema, updatePttRecordSchema, passwordSchema, isNextRedirectError, optionalString, nullableString, nullableInt, nullableDecimal, nullableBoolean, nullableLocExemption, nullablePttValidityBasis, nullablePttVehicleCapacityCategory, documentRequirementMode, nullableDate, nullableVersionId, ptcRecordData, buildPtcChecks, persistPtcChecks, calculationRuleData, pttRecordData, buildPttChecks, persistPttChecks, pttTransportCapacityData, pttValidityRuleData, safeReturnTo, masterDataReturnTo, withVersionParam, withToast, redirectWithToast, revalidateReports, revalidatePttApplications, calculationConfigFromFormData } from "./_shared";
 
@@ -59,17 +60,18 @@ export async function createRecordAction(formData: FormData) {
     const allowedDocumentIds = new Set(allowedDocuments.map((document) => document.id));
     const invalidDocumentIds = input.documentIds.filter((documentId) => !allowedDocumentIds.has(documentId));
     if (invalidDocumentIds.length > 0) redirectWithToast("/ptc/applications/new", "error", "One or more submitted files do not belong to the selected Version.");
-    const checkResult = await buildPtcChecks(formData, user, versionId, applicationTypeId);
-    if ("error" in checkResult) redirectWithToast("/ptc/applications/new", "error", checkResult.error || "Could not calculate the requested PTC check.");
+  const checkResult = await buildPtcChecks(formData, user, versionId, applicationTypeId);
+  if ("error" in checkResult) redirectWithToast("/ptc/applications/new", "error", checkResult.error || "Could not calculate the requested PTC check.");
+  const remarks = mergeRemarks(input.remarks, checkResult.checks.map((check) => check.findingMessage));
 
-    const record = await prisma.$transaction(async (tx) => {
+  const record = await prisma.$transaction(async (tx) => {
       const created = await tx.applicationRecord.create({
         data: {
           group: PERMIT_GROUP_PTC,
           versionId,
           applicantName: input.applicantName || null,
           applicationTypeId,
-          remarks: input.remarks || null,
+          remarks: remarks || null,
           ...ptcRecordData(formData),
           ...checkResult.data,
           createdById: user.id
@@ -191,7 +193,10 @@ export async function updateApplicationRecordAction(formData: FormData) {
   const versionId = nullableVersionId(formData.get("versionId"));
   const applicationTypeId = versionId ? input.applicationTypeId || null : null;
 
-  const current = await prisma.applicationRecord.findUnique({ where: { id: input.id } });
+  const current = await prisma.applicationRecord.findUnique({
+    where: { id: input.id },
+    include: { checkFindings: { where: { active: true }, select: { message: true } } }
+  });
   if (!current) redirectWithToast("/ptc/applications", "error", "Application record was not found.");
   if (!versionId && (input.applicationTypeId || input.documentIds.length > 0)) {
     redirectWithToast(returnTo, "error", "Assign a Version before choosing a type of application or submitted documents.");
@@ -226,6 +231,11 @@ export async function updateApplicationRecordAction(formData: FormData) {
   }
   const checkResult = await buildPtcChecks(formData, user, versionId, applicationTypeId);
   if ("error" in checkResult) redirectWithToast(returnTo, "error", checkResult.error || "Could not calculate the requested PTC check.");
+  const remarks = replaceGeneratedRemarks(
+    input.remarks,
+    current.checkFindings.map((finding) => finding.message),
+    checkResult.checks.map((check) => check.findingMessage)
+  );
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -237,7 +247,7 @@ export async function updateApplicationRecordAction(formData: FormData) {
           versionId,
           applicantName: input.applicantName || null,
           applicationTypeId,
-          remarks: input.remarks || null,
+          remarks: remarks || null,
           ...ptcRecordData(formData),
           ...checkResult.data,
           editedById: user.id

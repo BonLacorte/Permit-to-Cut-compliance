@@ -17,6 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { calculatePtcFee, calculatePtcValidity, feeFinding, normalizePtcCalculationConfig, validityFinding } from "@/lib/ptc-checks";
 import { defaultRuleData, resolvedPtcCalculationRule } from "@/lib/ptc-calculation-rules";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
+import { mergeRemarks, replaceGeneratedRemarks } from "@/lib/ptc-checks";
 
 import { createRecordSchema, updateRecordSchema, progressSchema, createPttRecordSchema, updatePttRecordSchema, passwordSchema, isNextRedirectError, optionalString, nullableString, nullableInt, nullableDecimal, nullableBoolean, nullableLocExemption, nullablePttValidityBasis, nullablePttVehicleCapacityCategory, documentRequirementMode, nullableDate, nullableVersionId, ptcRecordData, buildPtcChecks, persistPtcChecks, calculationRuleData, pttRecordData, buildPttChecks, persistPttChecks, pttTransportCapacityData, pttValidityRuleData, safeReturnTo, masterDataReturnTo, withVersionParam, withToast, redirectWithToast, revalidateReports, revalidatePttApplications, calculationConfigFromFormData } from "./_shared";
 
@@ -39,6 +40,7 @@ export async function createPttApplicationRecordAction(formData: FormData) {
     const pttData = pttRecordData(formData);
     const checkResult = await buildPttChecks(formData, user, versionId);
     if (checkResult.error) redirectWithToast("/ptt/applications/new", "error", checkResult.error);
+    const remarks = mergeRemarks(pttData.remarks, (checkResult.checks ?? []).map((check) => check.findingMessage));
 
     const record = await prisma.$transaction(async (tx) => {
       const created = await tx.pttApplicationRecord.create({
@@ -46,6 +48,7 @@ export async function createPttApplicationRecordAction(formData: FormData) {
           group: PERMIT_GROUP_PTT,
           versionId,
           ...pttData,
+          remarks: remarks || null,
           ...checkResult.data,
           createdById: user.id
         }
@@ -80,7 +83,10 @@ export async function updatePttApplicationRecordAction(formData: FormData) {
 
   const input = parsed.data;
   const versionId = nullableVersionId(formData.get("versionId"));
-  const current = await prisma.pttApplicationRecord.findUnique({ where: { id: input.id } });
+  const current = await prisma.pttApplicationRecord.findUnique({
+    where: { id: input.id },
+    include: { checkFindings: { where: { active: true }, select: { message: true } } }
+  });
   if (!current) redirectWithToast("/ptt/applications", "error", "PTT application record was not found.");
 
   try {
@@ -90,6 +96,11 @@ export async function updatePttApplicationRecordAction(formData: FormData) {
     const pttData = pttRecordData(formData);
     const checkResult = await buildPttChecks(formData, user, versionId);
     if (checkResult.error) redirectWithToast(returnTo, "error", checkResult.error);
+    const remarks = replaceGeneratedRemarks(
+      pttData.remarks,
+      current.checkFindings.map((finding) => finding.message),
+      (checkResult.checks ?? []).map((check) => check.findingMessage)
+    );
 
     await prisma.$transaction(async (tx) => {
       await tx.pttApplicationRecord.update({
@@ -97,6 +108,7 @@ export async function updatePttApplicationRecordAction(formData: FormData) {
         data: {
           versionId,
           ...pttData,
+          remarks: remarks || null,
           ...checkResult.data,
           editedById: user.id
         }
