@@ -1,4 +1,4 @@
-import { PtcFeeCalculator } from "@/components/ptc-fee-calculator";
+import { PtcFeeCalculator } from "@/components/ptc/fee-calculator";
 import { requireUser } from "@/lib/auth";
 
 export default async function PtcFeesCalculatorPage() {

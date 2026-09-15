@@ -1,12 +1,12 @@
 import { FeatureKey } from "@prisma/client";
 import Link from "next/link";
-import { PttApplicationsTable } from "@/components/ptt-applications-table";
-import { VersionFilter } from "@/components/version-filter";
+import { PttApplicationsTable } from "@/components/ptt/applications-table";
+import { VersionFilter } from "@/components/ptc/version-filter";
 import { requireUser, userHasFeature } from "@/lib/auth";
 import { getOfficeChoices, getPttApplicationRecords, getPttTransportTypes, getPttValidityRules, getVersionContext } from "@/lib/data";
 import { decimalOrZero, formatDate, formatValidityDays } from "@/lib/ptc";
 import { formatPttBoolean, PERMIT_GROUP_PTT, pttStatus } from "@/lib/ptt";
-import { pttValidityBasisLabel } from "@/lib/ptt-checks";
+import { pttCapacityCategoryLabel, pttValidityBasisLabel } from "@/lib/ptt-checks";
 import { pttValidityRuleConfig } from "@/lib/ptt-validity-rules";
 
 function formNumberValue(value: unknown) {
@@ -52,6 +52,8 @@ export default async function PttApplicationsPage({ searchParams }: { searchPara
     consigneeName: record.consigneeName || "",
     consigneePcaRegistration: record.consigneePcaRegistration || "",
     transportType: record.transportType || "",
+    actualTransportCategory: record.actualTransportCategory || "",
+    actualTransportDisplay: pttCapacityCategoryLabel(record.actualTransportCategory),
     vehiclePlateNumber: record.vehiclePlateNumber || "",
     authorizedDriverName: record.authorizedDriverName || "",
     authorizedDriverContact: record.authorizedDriverContact || "",
@@ -68,8 +70,12 @@ export default async function PttApplicationsPage({ searchParams }: { searchPara
     actualValidityDisplay: formatValidityDays(record.actualValidityDays),
     dateValidatedInspected: formatDate(record.dateValidatedInspected),
     validatedInspectedBy: record.validatedInspectedBy || "",
+    validatedInspectedBySignatureStatus: record.validatedInspectedBySignatureStatus || null,
+    validatedInspectedBySignatureForName: record.validatedInspectedBySignatureForName || "",
     issuedByDate: formatDate(record.issuedByDate),
     issuedBy: record.issuedBy || "",
+    issuedBySignatureStatus: record.issuedBySignatureStatus || null,
+    issuedBySignatureForName: record.issuedBySignatureForName || "",
     manualRemarks: record.manualRemarks || "",
     remarks: record.remarks || "",
     editedByName: record.editedByName || "",

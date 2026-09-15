@@ -63,13 +63,13 @@ export async function requireUser() {
 
 export async function requireAdmin() {
   const user = await requireUser();
-  if (user.role !== Role.ADMIN && user.role !== Role.SUPERADMIN) redirect("/dashboard");
+  if (user.role !== Role.ADMIN && user.role !== Role.SUPERADMIN) redirect("/ptc/dashboard");
   return user;
 }
 
 export async function requireSuperadmin() {
   const user = await requireUser();
-  if (user.role !== Role.SUPERADMIN) redirect("/dashboard");
+  if (user.role !== Role.SUPERADMIN) redirect("/ptc/dashboard");
   return user;
 }
 
@@ -87,7 +87,7 @@ export async function userHasFeature(user: { id: string; role: Role }, feature: 
 
 export async function requireFeature(feature: FeatureKey) {
   const user = await requireUser();
-  if (!(await userHasFeature(user, feature))) redirect("/dashboard");
+  if (!(await userHasFeature(user, feature))) redirect("/ptc/dashboard");
   return user;
 }
 

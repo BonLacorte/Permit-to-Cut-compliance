@@ -1,5 +1,5 @@
 import { loginAction } from "@/app/actions";
-import { SubmitButton } from "@/components/submit-button";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default function LoginPage() {
   return (

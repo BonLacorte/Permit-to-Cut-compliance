@@ -18,6 +18,7 @@ const completeRecord = {
   destination: "QUEZON CITY",
   consigneeName: "",
   transportType: "10 WHEELER",
+  actualTransportCategory: "TenWheelerTruck",
   vehiclePlateNumber: "CAF-5164",
   amountPaid: "3000",
   actualFee: "3000",
@@ -27,8 +28,12 @@ const completeRecord = {
   actualValidityDays: null,
   dateValidatedInspected: new Date("2026-05-11T00:00:00.000Z"),
   validatedInspectedBy: "ARVIN RAFAEL SG. LIZARDO",
+  validatedInspectedBySignatureStatus: "For",
+  validatedInspectedBySignatureForName: "Inspector Delegate",
   issuedByDate: new Date("2026-05-11T00:00:00.000Z"),
   issuedBy: "GABBY SCHYLER B. GALANG",
+  issuedBySignatureStatus: "Blank",
+  issuedBySignatureForName: "",
   remarks: "Sample record",
   editedByName: "Admin User",
   pttNumberDuplicate: true
@@ -81,13 +86,19 @@ describe("PTT helpers", () => {
       "PTC Number": "1360372",
       "Recorded Fee": "3,000",
       "Actual Fee": "3,000",
+      "Recorded Type of Transport Used": "10 WHEELER",
+      "Actual Type of Transport Used": "Ten-Wheeler Truck",
       "Validity Basis": "Within the Region",
       "Recorded Validity": "3",
       "Actual Validity": "",
+      "Validated/Inspected By Signature": "For",
+      "Validated/Inspected By Signature For": "Inspector Delegate",
       "Issued By Date": "2026-05-11",
+      "Issued By Signature": "Blank",
       Status: "Complete",
       "Edited By": "Admin User"
     });
+    expect(pttExportRows([completeRecord])[0]).not.toHaveProperty("Transport Type");
     expect(pttExportRows([completeRecord])[0]).not.toHaveProperty("Valid Until");
     expect(pttExportRows([completeRecord])[0]).not.toHaveProperty("Province");
     expect(pttExportRows([completeRecord])[0]).not.toHaveProperty("Validated/Inspected By Designation");

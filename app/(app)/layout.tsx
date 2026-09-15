@@ -1,30 +1,31 @@
 import Link from "next/link";
 import { logoutAction } from "@/app/actions";
-import { AppShell } from "@/components/app-shell";
-import { ChangePasswordButton } from "@/components/change-password-button";
-import { SubmitButton } from "@/components/submit-button";
+import { AppShell } from "@/components/layout/app-shell";
+import { ChangePasswordButton } from "@/components/layout/change-password-button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { userHasFeature, requireUser } from "@/lib/auth";
 import { FeatureKey, Role } from "@prisma/client";
+import { routes } from "@/lib/routes";
 
 const ptcNav = [
-  ["Dashboard", "/dashboard"],
-  ["Applications", "/applications"],
-  ["Missing Documents", "/reports/missing-documents"],
-  ["Document Summary", "/reports/document-summary"],
-  ["Document Coverage", "/reports/document-coverage"],
-  ["Application Summary", "/reports/application-summary"],
-  ["Completion Summary", "/reports/completion-summary"],
-  ["Document Combinations", "/reports/document-combinations"]
+  ["Dashboard", routes.ptc.dashboard],
+  ["Applications", routes.ptc.applications],
+  ["Missing Documents", routes.ptcReports.missingDocuments],
+  ["Document Summary", routes.ptcReports.documentSummary],
+  ["Document Coverage", routes.ptcReports.documentCoverage],
+  ["Application Summary", routes.ptcReports.applicationSummary],
+  ["Completion Summary", routes.ptcReports.completionSummary],
+  ["Document Combinations", routes.ptcReports.documentCombinations]
 ];
 
 const pttNav = [
-  ["Applications", "/ptt/applications"]
+  ["Applications", routes.ptt.applications]
 ];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const canUseFeesChecker = await userHasFeature(user, FeatureKey.PTC_FEES_CHECKER);
-  const ptcLinks = canUseFeesChecker ? [...ptcNav.slice(0, 2), ["RA 8048 Fees Calculator", "/ptc/fees-calculator"], ...ptcNav.slice(2)] : ptcNav;
+  const ptcLinks = canUseFeesChecker ? [...ptcNav.slice(0, 2), ["RA 8048 Fees Calculator", routes.ptc.feesCalculator], ...ptcNav.slice(2)] : ptcNav;
   const isAdmin = user.role === Role.ADMIN || user.role === Role.SUPERADMIN;
 
   return (
@@ -49,8 +50,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           {isAdmin ? (
             <div className="nav-group">
               <div className="nav-group-title">Admin</div>
-              <Link href="/admin/master-data">Master Data</Link>
-              {user.role === Role.SUPERADMIN ? <Link href="/admin/users">Accounts & Access</Link> : null}
+              <Link href={routes.admin.masterData}>Master Data</Link>
+              {user.role === Role.SUPERADMIN ? <Link href={routes.admin.users}>Accounts & Access</Link> : null}
             </div>
           ) : null}
           <form action={logoutAction}>

@@ -22,7 +22,7 @@ export const DEFAULT_PTC_CALCULATION_CONFIG: PtcCalculationConfig = {
   additionalProcessingStep: 50,
   additionalProcessingFee: 200,
   applicationFeePerTree: 100,
-  replantingFeePerTree: 100,
+  replantingFeePerTree: 50,
   maxTreesPerPtc: 100,
   validityBrackets: [
     { upTo: 20, days: 3 },

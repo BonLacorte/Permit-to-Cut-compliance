@@ -1,17 +1,18 @@
 import { FeatureKey } from "@prisma/client";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { EditPttApplicationButton } from "@/components/edit-ptt-application-button";
-import { StatusBadge } from "@/components/status-badge";
+import { EditPttApplicationButton } from "@/components/ptt/edit-application-button";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { requireUser, userHasFeature } from "@/lib/auth";
 import { getOfficeChoices, getPttTransportTypes, getPttValidityRules, getVersionContext } from "@/lib/data";
 import { formatDate, formatFee, formatValidityDays } from "@/lib/ptc";
 import { mergeRemarks } from "@/lib/ptc-checks";
 import { displayPttName, formatPttBoolean, formatPttNumber, PERMIT_GROUP_PTT, pttStatus } from "@/lib/ptt";
-import { pttValidityBasisLabel } from "@/lib/ptt-checks";
+import { pttCapacityCategoryLabel, pttValidityBasisLabel } from "@/lib/ptt-checks";
 import { prisma } from "@/lib/prisma";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
 import { pttValidityRuleConfig } from "@/lib/ptt-validity-rules";
+import { signatureStatusLabel } from "@/lib/signatures";
 
 function metadataValue(value: string) {
   return value || <span className="muted">Blank</span>;
@@ -79,6 +80,7 @@ export default async function PttApplicationDetailPage({ params }: { params: { i
             consigneeName: record.consigneeName || "",
             consigneePcaRegistration: record.consigneePcaRegistration || "",
             transportType: record.transportType || "",
+            actualTransportCategory: record.actualTransportCategory || "",
             vehiclePlateNumber: record.vehiclePlateNumber || "",
             authorizedDriverName: record.authorizedDriverName || "",
             authorizedDriverContact: record.authorizedDriverContact || "",
@@ -90,8 +92,12 @@ export default async function PttApplicationDetailPage({ params }: { params: { i
             validityBasis: record.validityBasis || "",
             dateValidatedInspected: formatDate(record.dateValidatedInspected),
             validatedInspectedBy: record.validatedInspectedBy || "",
+            validatedInspectedBySignatureStatus: record.validatedInspectedBySignatureStatus || null,
+            validatedInspectedBySignatureForName: record.validatedInspectedBySignatureForName || "",
             issuedByDate: formatDate(record.issuedByDate),
-            issuedBy: record.issuedBy || ""
+            issuedBy: record.issuedBy || "",
+            issuedBySignatureStatus: record.issuedBySignatureStatus || null,
+            issuedBySignatureForName: record.issuedBySignatureForName || ""
           }}
           officeChoices={officeChoices.map((office) => ({
             id: office.id,
@@ -156,7 +162,8 @@ export default async function PttApplicationDetailPage({ params }: { params: { i
           <div><span>Destination/s</span><strong>{metadataValue(record.destination || "")}</strong></div>
           <div><span>Consignee Name / Business Name</span><strong>{metadataValue(record.consigneeName || "")}</strong></div>
           <div><span>PCA Registration of Consignee</span><strong>{metadataValue(record.consigneePcaRegistration || "")}</strong></div>
-          <div><span>Type of Transport Used</span><strong>{metadataValue(record.transportType || "")}</strong></div>
+          <div><span>Recorded Type of Transport Used</span><strong>{metadataValue(record.transportType || "")}</strong></div>
+          <div><span>Actual Type of Transport Used</span><strong>{metadataValue(pttCapacityCategoryLabel(record.actualTransportCategory))}</strong></div>
           <div><span>Plate / Container / Vessel Number</span><strong>{metadataValue(record.vehiclePlateNumber || "")}</strong></div>
           <div><span>Authorized Driver Name</span><strong>{metadataValue(record.authorizedDriverName || "")}</strong></div>
           <div><span>Authorized Driver Contact</span><strong>{metadataValue(record.authorizedDriverContact || "")}</strong></div>
@@ -167,9 +174,13 @@ export default async function PttApplicationDetailPage({ params }: { params: { i
           <div><span>Recorded Validity</span><strong>{metadataValue(formatValidityDays(record.recordedValidityDays))}</strong></div>
           <div><span>Actual Validity</span><strong>{metadataValue(formatValidityDays(record.actualValidityDays))}</strong></div>
           <div><span>Date Validated/Inspected</span><strong>{metadataValue(formatDate(record.dateValidatedInspected))}</strong></div>
-          <div><span>Validated/Inspected By</span><strong>{metadataValue(record.validatedInspectedBy || "")}</strong></div>
           <div><span>Issued By Date</span><strong>{metadataValue(formatDate(record.issuedByDate))}</strong></div>
+          <div><span>Validated/Inspected By</span><strong>{metadataValue(record.validatedInspectedBy || "")}</strong></div>
+          <div><span>Validated/Inspected By Signature</span><strong>{signatureStatusLabel(record.validatedInspectedBySignatureStatus)}</strong></div>
+          <div><span>Validated/Inspected By Signature For</span><strong>{metadataValue(record.validatedInspectedBySignatureForName || "")}</strong></div>
           <div><span>Issued By</span><strong>{metadataValue(record.issuedBy || "")}</strong></div>
+          <div><span>Issued By Signature</span><strong>{signatureStatusLabel(record.issuedBySignatureStatus)}</strong></div>
+          <div><span>Issued By Signature For</span><strong>{metadataValue(record.issuedBySignatureForName || "")}</strong></div>
           <div><span>Edited By</span><strong>{metadataValue(record.editedBy?.name || "")}</strong></div>
         </div>
       </section>

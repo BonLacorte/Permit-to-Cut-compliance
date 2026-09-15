@@ -1,6 +1,6 @@
 import { createUserAction } from "@/app/actions";
-import { SubmitButton } from "@/components/submit-button";
-import { UsersTable } from "@/components/users-table";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { UsersTable } from "@/components/admin/users-table";
 import { requireSuperadmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 

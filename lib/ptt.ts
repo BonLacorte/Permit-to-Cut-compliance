@@ -1,5 +1,6 @@
 import { formatDate, formatFee, formatValidityDays } from "@/lib/ptc";
-import { pttValidityBasisLabel } from "@/lib/ptt-checks";
+import { pttCapacityCategoryLabel, pttValidityBasisLabel } from "@/lib/ptt-checks";
+import { signatureStatusLabel } from "@/lib/signatures";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
 
 export const PERMIT_GROUP_PTT = "PTT";
@@ -29,6 +30,7 @@ export type PttDisplayRecord = {
   consigneeName?: string | null;
   consigneePcaRegistration?: string | null;
   transportType?: string | null;
+  actualTransportCategory?: string | null;
   vehiclePlateNumber?: string | null;
   authorizedDriverName?: string | null;
   authorizedDriverContact?: string | null;
@@ -41,8 +43,12 @@ export type PttDisplayRecord = {
   validUntil?: Date | string | null;
   dateValidatedInspected?: Date | string | null;
   validatedInspectedBy?: string | null;
+  validatedInspectedBySignatureStatus?: string | null;
+  validatedInspectedBySignatureForName?: string | null;
   issuedByDate?: Date | string | null;
   issuedBy?: string | null;
+  issuedBySignatureStatus?: string | null;
+  issuedBySignatureForName?: string | null;
   remarks?: string | null;
   editedByName?: string | null;
   pttNumberDuplicate?: boolean;
@@ -197,7 +203,8 @@ export function pttExportRows(records: PttDisplayRecord[]) {
     Destination: record.destination || "",
     "Consignee Name": record.consigneeName || "",
     "Consignee PCA Registration": record.consigneePcaRegistration || "",
-    "Transport Type": record.transportType || "",
+    "Recorded Type of Transport Used": record.transportType || "",
+    "Actual Type of Transport Used": pttCapacityCategoryLabel(record.actualTransportCategory),
     "Plate/Container/Vessel Number": record.vehiclePlateNumber || "",
     "Authorized Driver Name": record.authorizedDriverName || "",
     "Authorized Driver Contact": record.authorizedDriverContact || "",
@@ -209,8 +216,12 @@ export function pttExportRows(records: PttDisplayRecord[]) {
     "Actual Validity": formatValidityDays(record.actualValidityDays),
     "Date Validated/Inspected": formatDate(record.dateValidatedInspected),
     "Validated/Inspected By": record.validatedInspectedBy || "",
+    "Validated/Inspected By Signature": signatureStatusLabel(record.validatedInspectedBySignatureStatus),
+    "Validated/Inspected By Signature For": record.validatedInspectedBySignatureForName || "",
     "Issued By Date": formatDate(record.issuedByDate),
     "Issued By": record.issuedBy || "",
+    "Issued By Signature": signatureStatusLabel(record.issuedBySignatureStatus),
+    "Issued By Signature For": record.issuedBySignatureForName || "",
     Status: pttStatus(record),
     Remarks: record.remarks || "",
     "Edited By": record.editedByName || ""

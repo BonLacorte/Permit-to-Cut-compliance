@@ -449,7 +449,10 @@ describe("reporting logic", () => {
       treesApplied: 25,
       treesApproved: 20,
       seedlingsReplacement: 10,
-      agriculturist: "A. Agriculturist"
+      agriculturist: "A. Agriculturist",
+      recommendingApprovalSignatureStatus: "For",
+      recommendingApprovalSignatureForName: "R. Delegate",
+      approvedSignatureStatus: "Blank"
     }, requiredDocuments);
 
     expect(applicationExportRows([auditWithValidity])[0]).toMatchObject({
@@ -459,7 +462,10 @@ describe("reporting logic", () => {
       "Trees Applied": 25,
       "Trees Approved": 20,
       "Seedlings Replacement": 10,
-      Agriculturist: "A. Agriculturist"
+      Agriculturist: "A. Agriculturist",
+      "Recommending Approval Signature": "For",
+      "Recommending Approval Signature For": "R. Delegate",
+      "Approved Signature": "Blank"
     });
   });
   it("treats blank fees as zero when comparing fees", () => {

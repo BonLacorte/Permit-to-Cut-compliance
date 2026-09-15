@@ -24,12 +24,20 @@ enum FeatureKey {
 enum ApplicationCheckType {
   Fee
   Validity
+  Signature
 }
 
 enum PttCheckType {
   Fee
   Validity
   Vehicle
+  Signature
+}
+
+enum SignatureStatus {
+  Signed
+  Blank
+  For
 }
 
 enum PttValidityBasis {
@@ -199,7 +207,11 @@ model ApplicationRecord {
   locExemption          LocExemption?
   agriculturist         String?
   recommendingApproval  String?
-  approved              String?
+  recommendingApprovalSignatureStatus     SignatureStatus?
+  recommendingApprovalSignatureForName    String?
+  approved                                String?
+  approvedSignatureStatus                 SignatureStatus?
+  approvedSignatureForName                String?
   createdById           String
   editedById            String?
   createdAt             DateTime                  @default(now())
@@ -345,6 +357,7 @@ model PttApplicationRecord {
   consigneeName                       String?
   consigneePcaRegistration            String?
   transportType                       String?
+  actualTransportCategory             PttVehicleCapacityCategory?
   vehiclePlateNumber                  String?
   authorizedDriverName                String?
   authorizedDriverContact             String?
@@ -357,10 +370,14 @@ model PttApplicationRecord {
   validUntil                          DateTime?
   dateValidatedInspected              DateTime?
   validatedInspectedBy                String?
+  validatedInspectedBySignatureStatus SignatureStatus?
+  validatedInspectedBySignatureForName String?
   issuedByDate                        DateTime?
   issuedBy                            String?
+  issuedBySignatureStatus             SignatureStatus?
+  issuedBySignatureForName            String?
   remarks                             String?
-  createdById                         String
+  createdById           String
   editedById                          String?
   createdAt                           DateTime                     @default(now())
   updatedAt                           DateTime                     @updatedAt

@@ -14,7 +14,7 @@ describe("PTC fee and validity checks", () => {
     expect(calculatePtcFee({ treesApproved: 50, replantedSeedlings: true, config: DEFAULT_PTC_CALCULATION_CONFIG }))
       .toMatchObject({ processingFee: 200, applicationFee: 5000, replantingFee: 0, actualFee: 5200 });
     expect(calculatePtcFee({ treesApproved: 50, replantedSeedlings: false, config: DEFAULT_PTC_CALCULATION_CONFIG }))
-      .toMatchObject({ actualFee: 10200 });
+      .toMatchObject({ actualFee: 7700 });
   });
 
   it("accepts a Type of Application override configuration", () => {

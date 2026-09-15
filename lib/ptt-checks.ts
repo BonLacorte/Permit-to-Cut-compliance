@@ -97,6 +97,18 @@ export function pttCapacityMaxFromCategory(value?: string | null) {
   return PTT_VEHICLE_CAPACITY_OPTIONS.find((option) => option.value === value)?.maxBoardFeet ?? null;
 }
 
+export function pttActualTransportForVolume(volumeBoardFeet: unknown) {
+  const volume = decimal(volumeBoardFeet);
+  if (volume <= 0) throw new Error("Enter Volume of Lumber to be Transported greater than zero before checking vehicle capacity.");
+  const option = PTT_VEHICLE_CAPACITY_OPTIONS.find((capacity) => volume <= capacity.maxBoardFeet) || null;
+  return {
+    volumeBoardFeet: volume,
+    actualTransportCategory: option?.value ?? null,
+    actualTransportLabel: option?.label ?? "No standard category",
+    actualTransportMaxBoardFeet: option?.maxBoardFeet ?? null
+  };
+}
+
 export function calculatePttFee({ volumeBoardFeet, ratePerBoardFoot = PTT_FEE_RATE_PER_BOARD_FOOT }: { volumeBoardFeet: unknown; ratePerBoardFoot?: number }) {
   const volume = decimal(volumeBoardFeet);
   if (volume <= 0) throw new Error("Enter Volume of Lumber to be Transported greater than zero before calculating fees.");
@@ -134,27 +146,39 @@ export function pttValidityFinding(recordedValidityDays: unknown, result: Return
 
 export function checkPttVehicleCapacity({ volumeBoardFeet, transportType, maxBoardFeet }: { volumeBoardFeet: unknown; transportType?: string | null; maxBoardFeet?: unknown }) {
   const typeName = String(transportType || "").trim();
-  if (!typeName) throw new Error("Choose a Type of Transport Used before checking vehicle capacity.");
-  const volume = decimal(volumeBoardFeet);
-  if (volume <= 0) throw new Error("Enter Volume of Lumber to be Transported greater than zero before checking vehicle capacity.");
-  const max = maxBoardFeet === null || maxBoardFeet === undefined || String(maxBoardFeet).trim() === "" ? null : decimal(maxBoardFeet);
-  if (!max || max <= 0) {
+  if (!typeName) throw new Error("Choose a Recorded Type of Transport Used before checking vehicle capacity.");
+  const actual = pttActualTransportForVolume(volumeBoardFeet);
+  if (actual.actualTransportMaxBoardFeet === null) {
+    const finding = `Vehicle capacity issue: transported volume ${formatNumber(actual.volumeBoardFeet)} bd. ft. exceeds the maximum standard capacity of Twelve-Wheeler and above (18,000 bd. ft.).`;
     return {
+      ...actual,
       transportType: typeName,
-      volumeBoardFeet: volume,
       maxBoardFeet: null,
-      withinCapacity: null as boolean | null,
-      warning: `No vehicle capacity rule is configured for ${typeName}.`,
-      finding: null as string | null
+      withinCapacity: false,
+      warning: null as string | null,
+      finding
     };
   }
-  const withinCapacity = volume <= max;
+
+  const max = maxBoardFeet === null || maxBoardFeet === undefined || String(maxBoardFeet).trim() === "" ? null : decimal(maxBoardFeet);
+  if (!max || max <= 0) {
+    const finding = `Vehicle capacity issue: recorded transport "${typeName}" has no configured capacity mapping. Minimum required category is "${actual.actualTransportLabel}".`;
+    return {
+      ...actual,
+      transportType: typeName,
+      maxBoardFeet: null,
+      withinCapacity: null as boolean | null,
+      warning: finding,
+      finding
+    };
+  }
+  const withinCapacity = actual.volumeBoardFeet <= max;
   return {
+    ...actual,
     transportType: typeName,
-    volumeBoardFeet: volume,
     maxBoardFeet: max,
     withinCapacity,
     warning: null as string | null,
-    finding: withinCapacity ? null : `Volume of boardfeet (${formatNumber(volume)}) exceeds the maximum capacity of the Type of Transport used (${formatNumber(max)}).`
+    finding: withinCapacity ? null : `Vehicle capacity issue: recorded transport "${typeName}" is mapped to ${formatNumber(max)} bd. ft., but the transported volume is ${formatNumber(actual.volumeBoardFeet)} bd. ft. Minimum required category is "${actual.actualTransportLabel}".`
   };
 }

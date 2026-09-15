@@ -1,0 +1,47 @@
+import { ReportTable } from "@/components/reports/report-table";
+import { VersionFilter } from "@/components/ptc/version-filter";
+import { getReportData, getVersionContext } from "@/lib/data";
+import { displayApplicantName, formatDate } from "@/lib/ptc";
+
+export default async function MissingDocumentsPage({ searchParams }: { searchParams?: { version?: string | string[] } }) {
+  const versionContext = await getVersionContext(searchParams?.version);
+  const { audits } = await getReportData({ versionId: versionContext.selectedVersionId });
+  const rows = audits.filter((audit) => audit.missingCount > 0).map((audit) => ({
+    applicationHref: `/ptc/applications/${audit.id}`,
+    dateIssued: formatDate(audit.dateIssued),
+    ptcNumber: audit.ptcNumber || "",
+    applicantName: displayApplicantName(audit),
+    applicationTypeName: audit.applicationTypeName,
+    missingCount: audit.missingCount,
+    missingDocuments: audit.missingDocuments.map((doc) => doc.name),
+    selectedDocuments: audit.selectedDocuments.map((doc) => doc.name)
+  }));
+
+  return (
+    <div className="grid">
+      <div className="topbar">
+        <div>
+          <h1>Missing Documents</h1>
+          <p className="muted">Applicant-level follow-up list for incomplete records.</p>
+        </div>
+        <VersionFilter options={versionContext.options} selected={versionContext.selectedVersionParam} path="/ptc-report/missing-documents" />
+      </div>
+      <section className="panel">
+        <ReportTable
+          rows={rows}
+          columns={[
+            { key: "dateIssued", label: "Date Issued", sortable: true },
+            { key: "ptcNumber", label: "PTC Number", sortable: true },
+            { key: "applicantName", label: "Name", sortable: true },
+            { key: "applicationTypeName", label: "Type of application", sortable: true },
+            { key: "missingCount", label: "Missing Count", sortable: true, type: "number" },
+            { key: "missingDocuments", label: "Missing Documents", type: "list" },
+            { key: "selectedDocuments", label: "Selected Documents", type: "list" }
+          ]}
+          empty="No missing documents."
+          rowHrefKey="applicationHref"
+        />
+      </section>
+    </div>
+  );
+}

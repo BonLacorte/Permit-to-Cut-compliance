@@ -1,5 +1,5 @@
 import { FeatureKey } from "@prisma/client";
-import { NewPttApplicationForm } from "@/components/new-ptt-application-form";
+import { NewPttApplicationForm } from "@/components/ptt/new-application-form";
 import { requireUser, userHasFeature } from "@/lib/auth";
 import { getOfficeChoices, getPttTransportTypes, getPttValidityRules, getVersionContext } from "@/lib/data";
 import { PERMIT_GROUP_PTT } from "@/lib/ptt";

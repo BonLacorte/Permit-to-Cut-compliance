@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculatePttFee, calculatePttValidity, checkPttVehicleCapacity, normalizePttValidityRuleConfig, pttCapacityMaxFromCategory, pttFeeFinding, pttValidityBasisOptions, pttValidityFinding } from "@/lib/ptt-checks";
+import { calculatePttFee, calculatePttValidity, checkPttVehicleCapacity, normalizePttValidityRuleConfig, pttActualTransportForVolume, pttCapacityMaxFromCategory, pttFeeFinding, pttValidityBasisOptions, pttValidityFinding } from "@/lib/ptt-checks";
 
 describe("PTT assisted checkers", () => {
   it("calculates transport fee from board-foot volume", () => {
@@ -60,12 +60,24 @@ describe("PTT assisted checkers", () => {
     expect(pttValidityFinding(3, result)).toBeNull();
   });
 
+  it("resolves the actual minimum transport category from volume brackets", () => {
+    expect(pttActualTransportForVolume(2000).actualTransportCategory).toBe("SmallerThanJeep");
+    expect(pttActualTransportForVolume(3500).actualTransportCategory).toBe("Jeep");
+    expect(pttActualTransportForVolume(4000).actualTransportCategory).toBe("ElfOrSixWheelerTruck");
+    expect(pttActualTransportForVolume(7000).actualTransportCategory).toBe("ForwardTruck");
+    expect(pttActualTransportForVolume(12000).actualTransportCategory).toBe("TenWheelerTruck");
+    expect(pttActualTransportForVolume(18000).actualTransportCategory).toBe("TwelveWheelerAndAbove");
+    expect(pttActualTransportForVolume(18001).actualTransportCategory).toBeNull();
+  });
+
   it("checks mapped vehicle capacity and reports excess volume", () => {
     const excess = checkPttVehicleCapacity({ volumeBoardFeet: 4500, transportType: "Six wheeler/forward", maxBoardFeet: 4000 });
-    expect(excess.finding).toBe("Volume of boardfeet (4,500) exceeds the maximum capacity of the Type of Transport used (4,000).");
+    expect(excess.finding).toBe('Vehicle capacity issue: recorded transport "Six wheeler/forward" is mapped to 4,000 bd. ft., but the transported volume is 4,500 bd. ft. Minimum required category is "Forward Truck".');
+    expect(excess.actualTransportCategory).toBe("ForwardTruck");
     expect(excess.withinCapacity).toBe(false);
 
     const ok = checkPttVehicleCapacity({ volumeBoardFeet: 3500, transportType: "Six wheeler/forward", maxBoardFeet: 4000 });
+    expect(ok.actualTransportCategory).toBe("Jeep");
     expect(ok.finding).toBeNull();
     expect(ok.withinCapacity).toBe(true);
   });
@@ -78,10 +90,24 @@ describe("PTT assisted checkers", () => {
     expect(custom.withinCapacity).toBe(true);
   });
 
-  it("warns instead of guessing when transport capacity is unmapped", () => {
-    const result = checkPttVehicleCapacity({ volumeBoardFeet: 3500, transportType: "Wing Van", maxBoardFeet: null });
-    expect(result.warning).toBe("No vehicle capacity rule is configured for Wing Van.");
+  it("allows a recorded transport with enough mapped capacity even when larger than the minimum category", () => {
+    const result = checkPttVehicleCapacity({ volumeBoardFeet: 3500, transportType: "Ten Wheelers/Wing Van", maxBoardFeet: 12000 });
+    expect(result.actualTransportCategory).toBe("Jeep");
     expect(result.finding).toBeNull();
+    expect(result.withinCapacity).toBe(true);
+  });
+
+  it("creates a finding when transport capacity is unmapped", () => {
+    const result = checkPttVehicleCapacity({ volumeBoardFeet: 3500, transportType: "Wing Van", maxBoardFeet: null });
+    expect(result.warning).toBe('Vehicle capacity issue: recorded transport "Wing Van" has no configured capacity mapping. Minimum required category is "Jeep".');
+    expect(result.finding).toBe(result.warning);
     expect(result.withinCapacity).toBeNull();
+  });
+
+  it("creates a finding when volume exceeds every standard transport category", () => {
+    const result = checkPttVehicleCapacity({ volumeBoardFeet: 18001, transportType: "Twelve Wheeler", maxBoardFeet: 18000 });
+    expect(result.actualTransportCategory).toBeNull();
+    expect(result.finding).toBe("Vehicle capacity issue: transported volume 18,001 bd. ft. exceeds the maximum standard capacity of Twelve-Wheeler and above (18,000 bd. ft.).");
+    expect(result.withinCapacity).toBe(false);
   });
 });
