@@ -69,7 +69,6 @@ New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
 
 $manifestPath = Join-Path $backupDir "manifest.txt"
 $countsPath = Join-Path $backupDir "production-counts.json"
-$dumpPathInContainer = "/backups/production-before-deploy.dump"
 $dumpPath = Join-Path $backupDir "production-before-deploy.dump"
 $tempEnvFile = New-TempEnvFile -DatabaseUrl $databaseUrl
 
@@ -133,10 +132,21 @@ SELECT jsonb_pretty(jsonb_build_object(
   if ($SkipDump) {
     Write-Host "SkipDump was set. Manifest and counts were created, but no pg_dump file was created." -ForegroundColor Yellow
   } else {
-    $dumpCommand = "pg_dump `"`$DATABASE_URL`" --format=custom --file `"$dumpPathInContainer`""
-    Invoke-PostgresContainer -EnvFile $tempEnvFile -MountSource $backupDir -MountTarget "/backups" -ShellCommand $dumpCommand | Out-Host
-    if (-not (Test-Path -LiteralPath $dumpPath)) {
-      throw "pg_dump finished but the expected dump file was not found: $dumpPath"
+    $dumpTempPath = "/tmp/production-before-deploy.dump"
+    $dumpCommand = "pg_dump `"`$DATABASE_URL`" --format=custom --file `"$dumpTempPath`""
+    $containerName = "grounds-prod-backup-" + [Guid]::NewGuid().ToString("N")
+    try {
+      & docker create --name $containerName --env-file $tempEnvFile postgres:17-alpine sh -c $dumpCommand | Out-Host
+      if ($LASTEXITCODE -ne 0) { throw "Could not create the PostgreSQL backup container." }
+      & docker start -a $containerName | Out-Host
+      if ($LASTEXITCODE -ne 0) { throw "pg_dump failed in the PostgreSQL backup container." }
+      & docker cp "${containerName}:$dumpTempPath" $dumpPath | Out-Host
+      if ($LASTEXITCODE -ne 0) { throw "Could not copy the PostgreSQL dump from the backup container." }
+    } finally {
+      & docker rm -f $containerName 2>$null | Out-Null
+    }
+    if (-not (Test-Path -LiteralPath $dumpPath) -or (Get-Item -LiteralPath $dumpPath).Length -eq 0) {
+      throw "pg_dump did not create a usable dump file."
     }
   }
 
