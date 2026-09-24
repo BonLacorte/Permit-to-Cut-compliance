@@ -1,4 +1,4 @@
-import { displayPtcField, feesMatchDisplay, formatDate, formatFee, displayReplantedSeedlings, formatSignedFeeDifference, formatValidityDays } from "@/lib/ptc";
+import { displayPtcField, feesMatchDisplay, formatAuditTimestamp, formatDate, formatFee, displayReplantedSeedlings, formatSignedFeeDifference, formatValidityDays } from "@/lib/ptc";
 import { signatureStatusLabel } from "@/lib/signatures";
 
 export type AuditStatus = "Complete" | "Incomplete" | "Pending";
@@ -27,7 +27,9 @@ export type RecordRef = {
   remarks?: string;
   manualRemarks?: string;
   createdByName?: string;
+  createdAt?: Date | string | null;
   editedByName?: string;
+  updatedAt?: Date | string | null;
   ptcNumber?: string | null;
   dateIssued?: Date | string | null;
   regionalOffice?: string | null;
@@ -359,6 +361,9 @@ export function applicationExportRows(audits: RecordAudit[]) {
     "Approved Signature For": audit.approvedSignatureForName || "",
     Status: audit.status,
     Remarks: audit.remarks || "",
-    "Edited By": audit.editedByName || ""
+    "Created By": audit.createdByName || "",
+    "Created At": formatAuditTimestamp(audit.createdAt),
+    "Edited By": audit.editedByName || "",
+    "Edited At": audit.editedByName ? formatAuditTimestamp(audit.updatedAt) : ""
   }));
 }

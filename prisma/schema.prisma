@@ -32,6 +32,7 @@ enum PttCheckType {
   Validity
   Vehicle
   Signature
+  RequiredFields
 }
 
 enum SignatureStatus {

@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { calculatePttFee, calculatePttValidity, checkPttVehicleCapacity, normalizePttValidityRuleConfig, pttActualTransportForVolume, pttCapacityMaxFromCategory, pttFeeFinding, pttValidityBasisOptions, pttValidityFinding } from "@/lib/ptt-checks";
+import { pttRequiredDateFinding, pttRequiredDateMessages } from "@/lib/ptt-required-fields";
 
 describe("PTT assisted checkers", () => {
+  it("creates and clears required date findings", () => {
+    expect(pttRequiredDateMessages({})).toEqual([
+      "There's no date in Date Issued field.",
+      "There's no date in Date Validated/Inspected field."
+    ]);
+    expect(pttRequiredDateFinding({ dateIssued: "2026-09-24", dateValidatedInspected: "2026-09-25" })).toBeNull();
+  });
+
   it("calculates transport fee from board-foot volume", () => {
     expect(calculatePttFee({ volumeBoardFeet: 10000 })).toMatchObject({
       volumeBoardFeet: 10000,

@@ -18,7 +18,7 @@ function signatureRemark(fieldLabel: string, status: unknown, forName: unknown, 
   if (normalized === "Signed") return null;
   if (normalized === "Blank") return `There's no signature in ${fieldLabel} field.`;
   const signer = cleanName(forName) || cleanName(fallbackName) || "Blank";
-  return `The signature in ${fieldLabel} field was signed 'For' by ${signer} on behalf of the authorized signatory.`;
+  return `The signature in ${fieldLabel} field was signed ‘For’ by ${signer} on behalf of the authorized signatory.`;
 }
 
 export type PtcSignatureSource = {

@@ -1,4 +1,4 @@
-import { formatDate, formatFee, formatValidityDays } from "@/lib/ptc";
+import { formatAuditTimestamp, formatDate, formatFee, formatValidityDays } from "@/lib/ptc";
 import { pttCapacityCategoryLabel, pttValidityBasisLabel } from "@/lib/ptt-checks";
 import { signatureStatusLabel } from "@/lib/signatures";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
@@ -50,7 +50,10 @@ export type PttDisplayRecord = {
   issuedBySignatureStatus?: string | null;
   issuedBySignatureForName?: string | null;
   remarks?: string | null;
+  createdByName?: string | null;
+  createdAt?: Date | string | null;
   editedByName?: string | null;
+  updatedAt?: Date | string | null;
   pttNumberDuplicate?: boolean;
 };
 
@@ -101,6 +104,10 @@ function hasValue(value: unknown) {
 
 export function pttVersionQueryValue(versionId: string | null) {
   return versionId || UNCATEGORIZED_VERSION;
+}
+
+export function newPttApplicationPath(versionId: string | null) {
+  return versionId ? `/ptt/applications/new?version=${encodeURIComponent(versionId)}` : "/ptt/applications/new";
 }
 
 export function pttRegionName(record: Pick<PttDisplayRecord, "regionalOffice">) {
@@ -224,6 +231,9 @@ export function pttExportRows(records: PttDisplayRecord[]) {
     "Issued By Signature For": record.issuedBySignatureForName || "",
     Status: pttStatus(record),
     Remarks: record.remarks || "",
-    "Edited By": record.editedByName || ""
+    "Created By": record.createdByName || "",
+    "Created At": formatAuditTimestamp(record.createdAt),
+    "Edited By": record.editedByName || "",
+    "Edited At": record.editedByName ? formatAuditTimestamp(record.updatedAt) : ""
   }));
 }

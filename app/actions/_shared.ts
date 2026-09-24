@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { calculatePtcFee, calculatePtcValidity, feeFinding, normalizePtcCalculationConfig, validityFinding } from "@/lib/ptc-checks";
 import { defaultRuleData, resolvedPtcCalculationRule } from "@/lib/ptc-calculation-rules";
 import { ptcSignatureFinding, pttSignatureFinding } from "@/lib/signatures";
+import { pttRequiredDateFinding } from "@/lib/ptt-required-fields";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
 
 export const createRecordSchema = z.object({
@@ -367,6 +368,19 @@ export async function buildPttChecks(formData: FormData, user: { id: string; rol
   const applyVehicle = String(formData.get("applyPttVehicleCheck") || "") === "true";
   const checks: PendingPttCheck[] = [];
   const data: { actualFee?: number; actualValidityDays?: number; actualTransportCategory?: PttVehicleCapacityCategory | null } = {};
+  const requiredDateInput = {
+    dateIssued: nullableDate(formData.get("dateIssued")),
+    dateValidatedInspected: nullableDate(formData.get("dateValidatedInspected"))
+  };
+  const requiredDateFinding = pttRequiredDateFinding(requiredDateInput);
+  checks.push({
+    checkType: PttCheckType.RequiredFields,
+    inputSnapshot: requiredDateInput,
+    ruleSnapshot: { requiredFields: ["dateIssued", "dateValidatedInspected"] },
+    outputSnapshot: { messages: requiredDateFinding ? requiredDateFinding.split("\n") : [] },
+    comparisonSnapshot: { hasMissingRequiredDates: Boolean(requiredDateFinding) },
+    findingMessage: requiredDateFinding
+  });
   const signatureInput = {
     validatedInspectedBy: nullableString(formData.get("validatedInspectedBy")),
     validatedInspectedBySignatureStatus: nullableSignatureStatus(formData.get("validatedInspectedBySignatureStatus")),

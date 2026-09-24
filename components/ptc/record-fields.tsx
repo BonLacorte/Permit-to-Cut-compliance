@@ -5,6 +5,7 @@ import { FieldHelp } from "@/components/ui/field-help";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { SignatureFieldGroup } from "@/components/ui/signature-field-group";
 import type { OfficeChoice } from "@/lib/ptc";
+import { ptcSignatureMessages } from "@/lib/signatures";
 
 type PtcRecordFieldsProps = {
   officeChoices: OfficeChoice[];
@@ -60,14 +61,30 @@ type FeePreview = { actualFee: number; processingFee: number; applicationFee: nu
 type ValidityPreview = { actualValidityDays: number; exceedsSinglePtcLimit: boolean; maxTreesPerPtc: number; finding: string | null };
 type AutoCheckStatus = { kind: "idle" | "missing" | "calculating" | "ready" | "error"; message: string };
 
+const PTC_SIGNATURE_FIELD_NAMES = new Set([
+  "recommendingApproval",
+  "recommendingApprovalSignatureStatus",
+  "recommendingApprovalSignatureForName",
+  "approved",
+  "approvedSignatureStatus",
+  "approvedSignatureForName"
+]);
+
+function sameFindings(current: string[], next: string[]) {
+  return current.length === next.length && current.every((finding, index) => finding === next[index]);
+}
+
 export function PtcRecordFields({ defaults, officeChoices, checkerAccess, onGeneratedFindingsChange }: PtcRecordFieldsProps) {
+  const hasCalculationChecks = Boolean(checkerAccess?.fees || checkerAccess?.validity);
   const [regionalOffice, setRegionalOffice] = useState(defaults?.regionalOffice || "");
   const [feeApplied, setFeeApplied] = useState(false);
   const [validityApplied, setValidityApplied] = useState(false);
   const [feePreview, setFeePreview] = useState<FeePreview | null>(null);
   const [validityPreview, setValidityPreview] = useState<ValidityPreview | null>(null);
+  const [signatureFindings, setSignatureFindings] = useState<string[]>([]);
   const [autoCheckStatus, setAutoCheckStatus] = useState<AutoCheckStatus>({ kind: "idle", message: "Fill out the checker inputs to start the automatic PTC check." });
   const autoCheckHostRef = useRef<HTMLDivElement | null>(null);
+  const signatureFieldsRef = useRef<HTMLElement | null>(null);
   const requestIdRef = useRef(0);
   const provincialOffices = useMemo(
     () => officeChoices.find((office) => office.name === regionalOffice)?.provincialOffices || [],
@@ -77,8 +94,38 @@ export function PtcRecordFields({ defaults, officeChoices, checkerAccess, onGene
   const savedFeeWasCorrected = savedActualFee !== null && feePreview !== null && savedActualFee !== feePreview.actualFee;
 
   useEffect(() => {
-    onGeneratedFindingsChange?.([feePreview?.finding, validityPreview?.finding].filter((finding): finding is string => Boolean(finding)));
-  }, [feePreview, validityPreview, onGeneratedFindingsChange]);
+    onGeneratedFindingsChange?.([feePreview?.finding, validityPreview?.finding, ...signatureFindings].filter((finding): finding is string => Boolean(finding)));
+  }, [feePreview, validityPreview, signatureFindings, onGeneratedFindingsChange]);
+
+  useEffect(() => {
+    const form = signatureFieldsRef.current?.closest("form");
+    if (!form) return;
+    const updateSignatureFindings = () => {
+      const data = new FormData(form);
+      const nextFindings = ptcSignatureMessages({
+        recommendingApproval: data.get("recommendingApproval")?.toString(),
+        recommendingApprovalSignatureStatus: data.get("recommendingApprovalSignatureStatus")?.toString(),
+        recommendingApprovalSignatureForName: data.get("recommendingApprovalSignatureForName")?.toString(),
+        approved: data.get("approved")?.toString(),
+        approvedSignatureStatus: data.get("approvedSignatureStatus")?.toString(),
+        approvedSignatureForName: data.get("approvedSignatureForName")?.toString()
+      });
+      setSignatureFindings((current) => sameFindings(current, nextFindings) ? current : nextFindings);
+    };
+    const updateForSignatureField = (event: Event) => {
+      const target = event.target;
+      if ((target instanceof HTMLInputElement || target instanceof HTMLSelectElement) && PTC_SIGNATURE_FIELD_NAMES.has(target.name)) {
+        updateSignatureFindings();
+      }
+    };
+    updateSignatureFindings();
+    form.addEventListener("input", updateForSignatureField);
+    form.addEventListener("change", updateForSignatureField);
+    return () => {
+      form.removeEventListener("input", updateForSignatureField);
+      form.removeEventListener("change", updateForSignatureField);
+    };
+  }, []);
 
   useEffect(() => {
     if (!checkerAccess?.fees && !checkerAccess?.validity) return;
@@ -178,7 +225,7 @@ export function PtcRecordFields({ defaults, officeChoices, checkerAccess, onGene
   }, [checkerAccess?.fees, checkerAccess?.validity]);
 
   return (
-    <section className="form-section">
+    <section ref={signatureFieldsRef} className="form-section">
       <h3>PTC Details</h3>
       <div className="grid cols-2">
         <div className="field">
@@ -269,27 +316,30 @@ export function PtcRecordFields({ defaults, officeChoices, checkerAccess, onGene
           <label htmlFor="recommendingApproval">Recommending Approval</label>
           <input id="recommendingApproval" name="recommendingApproval" defaultValue={defaults?.recommendingApproval || ""} />
         </div>
-        <SignatureFieldGroup label="Recommending Approval Signature" statusName="recommendingApprovalSignatureStatus" forNameName="recommendingApprovalSignatureForName" defaultStatus={defaults?.recommendingApprovalSignatureStatus} defaultForName={defaults?.recommendingApprovalSignatureForName} fallbackLabel="Approved" />
         <div className="field">
           <label htmlFor="approved">Approved</label>
           <input id="approved" name="approved" defaultValue={defaults?.approved || ""} />
         </div>
+        <SignatureFieldGroup label="Recommending Approval Signature" statusName="recommendingApprovalSignatureStatus" forNameName="recommendingApprovalSignatureForName" defaultStatus={defaults?.recommendingApprovalSignatureStatus} defaultForName={defaults?.recommendingApprovalSignatureForName} fallbackLabel="Approved" />
         <SignatureFieldGroup label="Approved Signature" statusName="approvedSignatureStatus" forNameName="approvedSignatureForName" defaultStatus={defaults?.approvedSignatureStatus} defaultForName={defaults?.approvedSignatureForName} fallbackLabel="Recommending Approval" />
         <div className="field full-width-field">
           <label htmlFor="agriculturist">Agriculturist</label>
           <input id="agriculturist" name="agriculturist" defaultValue={defaults?.agriculturist || ""} />
         </div>
       </div>
-      {checkerAccess?.fees || checkerAccess?.validity ? <>
+      {hasCalculationChecks ? <>
         <input type="hidden" name="applyFeeCheck" value={feeApplied ? "true" : "false"} />
         <input type="hidden" name="applyValidityCheck" value={validityApplied ? "true" : "false"} />
-        <aside ref={autoCheckHostRef} className="form-section calculation-panel">
-          <div className="section-heading-row"><div><h3>PTC Auto Check</h3><p className="muted">Automatically uses the selected Version, Type of Application, approved trees, Replanted Seedlings, and recorded values.</p></div></div>
+      </> : null}
+      <aside ref={autoCheckHostRef} className="form-section calculation-panel">
+        <div className="section-heading-row"><div><h3>PTC Auto Check</h3><p className="muted">Checks the selected Version, Type of Application, approved trees, Replanted Seedlings, recorded values, and signatures.</p></div></div>
+        {hasCalculationChecks ? <>
           {autoCheckStatus.kind === "missing" || autoCheckStatus.kind === "error" ? <p className="error-text" role="alert">{autoCheckStatus.message}</p> : <p className={autoCheckStatus.kind === "ready" ? "success-text" : "muted"}>{autoCheckStatus.message}</p>}
           {feePreview ? <div className="calculation-result"><strong>Actual Fee: {feePreview.actualFee.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong><span>Processing {feePreview.processingFee.toLocaleString("en-PH")} + application {feePreview.applicationFee.toLocaleString("en-PH")} + replanting {feePreview.replantingFee.toLocaleString("en-PH")}</span>{feePreview.finding ? <p className="warning-text">{feePreview.finding}</p> : <p className="success-text">Fees match.</p>}</div> : null}
           {validityPreview ? <div className="calculation-result"><strong>Actual Validity: {validityPreview.actualValidityDays} day{validityPreview.actualValidityDays === 1 ? "" : "s"}</strong>{validityPreview.finding ? <p className="warning-text">{validityPreview.finding}</p> : <p className="success-text">Validity matches.</p>}</div> : null}
-        </aside>
-      </> : null}
+        </> : null}
+        <div className="calculation-result"><strong>Signature Check</strong>{signatureFindings.length > 0 ? signatureFindings.map((finding) => <p className="warning-text" key={finding}>{finding}</p>) : <p className="success-text">Recommending Approval and Approved signatures are signed.</p>}</div>
+      </aside>
     </section>
   );
 }
