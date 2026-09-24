@@ -9,6 +9,7 @@ import type { OfficeChoice } from "@/lib/ptc";
 import { DEFAULT_PTT_VALIDITY_RULE_CONFIG, PTT_VEHICLE_CAPACITY_OPTIONS, normalizePttValidityRuleConfig, pttCapacityCategoryLabel, pttOutsideRegionValidityDays, pttValidityBasisLabel, pttValidityBasisOptions, type PttValidityRuleConfig } from "@/lib/ptt-checks";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
 import { pttSignatureMessages } from "@/lib/signatures";
+import { pttRequiredDateMessages } from "@/lib/ptt-required-fields";
 
 export type PttValidityRuleOption = PttValidityRuleConfig & { versionId: string };
 
@@ -103,6 +104,8 @@ const PTT_SIGNATURE_FIELD_NAMES = new Set([
   "issuedBySignatureForName"
 ]);
 
+const PTT_REQUIRED_DATE_FIELD_NAMES = new Set(["dateIssued", "dateValidatedInspected"]);
+
 function sameFindings(current: string[], next: string[]) {
   return current.length === next.length && current.every((finding, index) => finding === next[index]);
 }
@@ -130,6 +133,7 @@ export function PttRecordFields({ defaults, officeChoices, transportTypes, valid
   const [feePreview, setFeePreview] = useState<FeePreview | null>(null);
   const [validityPreview, setValidityPreview] = useState<ValidityPreview | null>(null);
   const [vehiclePreview, setVehiclePreview] = useState<VehiclePreview | null>(null);
+  const [requiredDateFindings, setRequiredDateFindings] = useState<string[]>([]);
   const [signatureFindings, setSignatureFindings] = useState<string[]>([]);
   const [autoCheckStatus, setAutoCheckStatus] = useState<AutoCheckStatus>({ kind: "idle", message: "Fill out checker inputs to start the automatic PTT check." });
   const autoCheckHostRef = useRef<HTMLDivElement | null>(null);
@@ -156,8 +160,34 @@ export function PttRecordFields({ defaults, officeChoices, transportTypes, valid
   const outsideValidityDayOptions = useMemo(() => pttOutsideRegionValidityDays(selectedValidityRule), [selectedValidityRule]);
 
   useEffect(() => {
-    onGeneratedFindingsChange?.([feePreview?.finding, validityPreview?.finding, vehiclePreview?.finding, ...signatureFindings].filter((finding): finding is string => Boolean(finding)));
-  }, [feePreview, validityPreview, vehiclePreview, signatureFindings, onGeneratedFindingsChange]);
+    onGeneratedFindingsChange?.([feePreview?.finding, validityPreview?.finding, vehiclePreview?.finding, ...requiredDateFindings, ...signatureFindings].filter((finding): finding is string => Boolean(finding)));
+  }, [feePreview, validityPreview, vehiclePreview, requiredDateFindings, signatureFindings, onGeneratedFindingsChange]);
+
+  useEffect(() => {
+    const form = signatureFieldsRef.current?.closest("form");
+    if (!form) return;
+    const updateRequiredDateFindings = () => {
+      const data = new FormData(form);
+      const nextFindings = pttRequiredDateMessages({
+        dateIssued: data.get("dateIssued")?.toString(),
+        dateValidatedInspected: data.get("dateValidatedInspected")?.toString()
+      });
+      setRequiredDateFindings((current) => sameFindings(current, nextFindings) ? current : nextFindings);
+    };
+    const updateForRequiredDateField = (event: Event) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement && PTT_REQUIRED_DATE_FIELD_NAMES.has(target.name)) {
+        updateRequiredDateFindings();
+      }
+    };
+    updateRequiredDateFindings();
+    form.addEventListener("input", updateForRequiredDateField);
+    form.addEventListener("change", updateForRequiredDateField);
+    return () => {
+      form.removeEventListener("input", updateForRequiredDateField);
+      form.removeEventListener("change", updateForRequiredDateField);
+    };
+  }, []);
 
   useEffect(() => {
     const form = signatureFieldsRef.current?.closest("form");
@@ -365,13 +395,14 @@ export function PttRecordFields({ defaults, officeChoices, transportTypes, valid
           <input type="hidden" name="applyPttVehicleCheck" value={vehicleApplied ? "true" : "false"} />
         </> : null}
         <aside ref={autoCheckHostRef} className="form-section calculation-panel">
-          <div className="section-heading-row"><div><h3>PTT Auto Check</h3><p className="muted">Checks volume, recorded values, validity basis, mapped transport capacity, and signatures.</p></div></div>
+          <div className="section-heading-row"><div><h3>PTT Auto Check</h3><p className="muted">Checks volume, recorded values, validity basis, mapped transport capacity, required dates, and signatures.</p></div></div>
           {hasCalculationChecks ? <>
             {autoCheckStatus.kind === "missing" || autoCheckStatus.kind === "error" ? <p className="error-text" role="alert">{autoCheckStatus.message}</p> : <p className={autoCheckStatus.kind === "ready" ? "success-text" : "muted"}>{autoCheckStatus.message}</p>}
             {feePreview ? <div className="calculation-result"><strong>Actual Fee: {feePreview.actualFee.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong><span>{feePreview.volumeBoardFeet.toLocaleString("en-PH")} bd. ft. x PHP {feePreview.ratePerBoardFoot.toFixed(2)}</span>{feePreview.finding ? <p className="warning-text">{feePreview.finding}</p> : <p className="success-text">Fees match.</p>}</div> : null}
             {validityPreview ? <div className="calculation-result"><strong>Actual Validity: {validityPreview.actualValidityDays} day{validityPreview.actualValidityDays === 1 ? "" : "s"}</strong><span>{validityPreview.basisLabel || pttValidityBasisLabel(validityPreview.validityBasis, selectedValidityRule)}</span>{validityPreview.finding ? <p className="warning-text">{validityPreview.finding}</p> : <p className="success-text">Validity matches.</p>}</div> : null}
             {vehiclePreview ? <div className="calculation-result"><strong>Vehicle Capacity Check</strong><span>Actual type: {vehiclePreview.actualTransportLabel}</span>{vehiclePreview.maxBoardFeet === null ? <p className="warning-text">{vehiclePreview.warning}</p> : <span>Recorded limit: {vehiclePreview.maxBoardFeet.toLocaleString("en-PH")} bd. ft.</span>}{vehiclePreview.finding ? <p className="warning-text">{vehiclePreview.finding}</p> : vehiclePreview.maxBoardFeet !== null ? <p className="success-text">Recorded transport capacity covers the volume.</p> : null}</div> : null}
           </> : null}
+          <div className="calculation-result"><strong>Required Dates Check</strong>{requiredDateFindings.length > 0 ? requiredDateFindings.map((finding) => <p className="warning-text" key={finding}>{finding}</p>) : <p className="success-text">Date Issued and Date Validated/Inspected are filled.</p>}</div>
           <div className="calculation-result"><strong>Signature Check</strong>{signatureFindings.length > 0 ? signatureFindings.map((finding) => <p className="warning-text" key={finding}>{finding}</p>) : <p className="success-text">Validated/Inspected By and Issued By signatures are signed.</p>}</div>
         </aside>
       </section>

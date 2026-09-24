@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
 import { filterDashboardAuditsByProvincialOffice, filterDashboardAuditsByRegion } from "@/lib/dashboard";
-import { feesMatchDisplay, formatSignedFeeDifference } from "@/lib/ptc";
+import { feesMatchDisplay, formatAuditTimestamp, formatSignedFeeDifference } from "@/lib/ptc";
 import { buildReportWorkbook } from "@/lib/excel";
 import {
   auditRecord,
@@ -64,6 +64,11 @@ const records: RecordRef[] = [
 ];
 
 describe("reporting logic", () => {
+  it("formats audit timestamps in Philippine time", () => {
+    expect(formatAuditTimestamp(new Date("2026-09-25T08:30:00.000Z"))).toBe("2026-09-25 16:30 PHT");
+    expect(formatAuditTimestamp(null)).toBe("");
+  });
+
   it("computes required, submitted, missing, and incomplete state for a record", () => {
     const audit = auditRecord(records[0], requiredDocuments);
     expect(audit.requiredCount).toBe(2);
@@ -465,7 +470,33 @@ describe("reporting logic", () => {
       Agriculturist: "A. Agriculturist",
       "Recommending Approval Signature": "For",
       "Recommending Approval Signature For": "R. Delegate",
-      "Approved Signature": "Blank"
+      "Approved Signature": "Blank",
+      "Created By": "",
+      "Created At": "",
+      "Edited By": "",
+      "Edited At": ""
+    });
+  });
+
+  it("exports PTC audit metadata and leaves unedited values blank", () => {
+    const audit = auditRecord({
+      id: "r-audit",
+      versionId,
+      applicantName: "Audit Person",
+      applicationTypeId: "appA",
+      applicationTypeName: "Type A",
+      selectedDocumentIds: ["a1", "a2"],
+      createdByName: "Creator User",
+      createdAt: new Date("2026-09-25T00:00:00.000Z"),
+      editedByName: "",
+      updatedAt: new Date("2026-09-25T01:00:00.000Z")
+    }, requiredDocuments);
+
+    expect(applicationExportRows([audit])[0]).toMatchObject({
+      "Created By": "Creator User",
+      "Created At": "2026-09-25 08:00 PHT",
+      "Edited By": "",
+      "Edited At": ""
     });
   });
   it("treats blank fees as zero when comparing fees", () => {
@@ -480,5 +511,4 @@ describe("reporting logic", () => {
     expect(formatSignedFeeDifference({ actualFee: null, recordedFee: "" })).toBe("0");
   });
 });
-
 

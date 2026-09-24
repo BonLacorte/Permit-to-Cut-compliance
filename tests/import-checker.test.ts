@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
-import { PTC_IMPORT_COLUMNS, PTT_IMPORT_COLUMNS } from "@/lib/excel";
+import { parsePtcRecordsWorkbook, parsePttRecordsWorkbook, PTC_IMPORT_COLUMNS, PTT_IMPORT_COLUMNS } from "@/lib/excel";
 import { checkPtcImportWorkbook, checkPttImportWorkbook, type OfficeImportChoice } from "@/lib/import-checker";
 
 const offices: OfficeImportChoice[] = [
@@ -43,8 +43,7 @@ describe("import checker", () => {
   });
 
   it("reports PTC blocking errors and review warnings", () => {
-    const result = checkPtcImportWorkbook(
-      workbookBuffer([...PTC_IMPORT_COLUMNS, "Unused Column"], [[
+    const buffer = workbookBuffer([...PTC_IMPORT_COLUMNS, "Unused Column"], [[
         "Region IV-A",
         "Agusan del Norte",
         "1331290",
@@ -58,7 +57,9 @@ describe("import checker", () => {
         "Unknown Type",
         "Tenant",
         "Ignored"
-      ]]),
+      ]]);
+    const result = checkPtcImportWorkbook(
+      buffer,
       {
         versionId: "version-a",
         applicationTypeNames: ["Type A"],
@@ -75,6 +76,28 @@ describe("import checker", () => {
     expect(result.issues).toContainEqual(expect.objectContaining({ field: "PTC Number", severity: "Warning" }));
     expect(result.issues).toContainEqual(expect.objectContaining({ field: "Provincial Office", severity: "Warning" }));
     expect(result.issues).toContainEqual(expect.objectContaining({ field: "Type of Application", severity: "Warning" }));
+    expect(parsePtcRecordsWorkbook(buffer)[0]).toMatchObject({
+      dateIssued: undefined,
+      treesApplied: undefined,
+      locExemption: undefined
+    });
+  });
+
+  it("reports PTC header errors while retaining positional row data for a forced import", () => {
+    const headers = ["Wrong Regional Header", ...PTC_IMPORT_COLUMNS.slice(1)];
+    const buffer = workbookBuffer(headers, [[
+      "Region IV-A", "Quezon I", "1331290", "04/09/2025", "ALDRIN U. PEREZ", "IBA. BUKAL", "TAYABAS CITY", 10, 8, 0, "Type A", "Owner"
+    ]]);
+
+    const result = checkPtcImportWorkbook(buffer, {
+      versionId: "version-a",
+      applicationTypeNames: ["Type A"],
+      existingPtcNumbers: [],
+      officeChoices: offices
+    });
+
+    expect(result).toMatchObject({ rowsChecked: 1, readyRows: 0, errorCount: 1 });
+    expect(parsePtcRecordsWorkbook(buffer)[0]).toMatchObject({ regionalOffice: "Region IV-A", applicantName: "ALDRIN U. PEREZ" });
   });
 
   it("accepts a valid PTT workbook and warns about unknown transport types", () => {
@@ -126,8 +149,7 @@ describe("import checker", () => {
   });
 
   it("blocks PTT preview when the version or typed cells are invalid", () => {
-    const result = checkPttImportWorkbook(
-      workbookBuffer(PTT_IMPORT_COLUMNS, [[
+    const buffer = workbookBuffer(PTT_IMPORT_COLUMNS, [[
         "Region XIII",
         "Agusan del Norte",
         "1194031",
@@ -160,7 +182,9 @@ describe("import checker", () => {
         "",
         "",
         ""
-      ]]),
+      ]]);
+    const result = checkPttImportWorkbook(
+      buffer,
       {
         versionId: null,
         transportTypes: ["10 WHEELER"],
@@ -175,5 +199,30 @@ describe("import checker", () => {
     expect(result.issues).toContainEqual(expect.objectContaining({ field: "Date Issued", severity: "Error" }));
     expect(result.issues).toContainEqual(expect.objectContaining({ field: "Certificate of Quantity/Volume Attached", severity: "Error" }));
     expect(result.issues).toContainEqual(expect.objectContaining({ field: "PTT Number", severity: "Warning" }));
+    expect(parsePttRecordsWorkbook(buffer)[0]).toMatchObject({
+      dateIssued: undefined,
+      boardFeetGranted: undefined,
+      certificateOfQuantityVolumeAttached: undefined,
+      validityBasis: undefined,
+      recordedValidityDays: undefined
+    });
+  });
+
+  it("reports PTT header errors while retaining positional row data for a forced import", () => {
+    const headers = ["Wrong Regional Header", ...PTT_IMPORT_COLUMNS.slice(1)];
+    const row = [
+      "Region XIII", "Agusan del Norte", "1194031", "21/02/2024", "Leandro N. Pendejeto", "", "", "", "", "", "", "", "", "", "", "", "", "10 WHEELER", "", "", "", "", "", "", "Within the Region", 3, "", "", "", "", "", ""
+    ];
+    const buffer = workbookBuffer(headers, [row]);
+
+    const result = checkPttImportWorkbook(buffer, {
+      versionId: "ptt-version-default",
+      transportTypes: ["10 WHEELER"],
+      existingPttNumbers: [],
+      officeChoices: offices
+    });
+
+    expect(result).toMatchObject({ rowsChecked: 1, readyRows: 0, errorCount: 1 });
+    expect(parsePttRecordsWorkbook(buffer)[0]).toMatchObject({ regionalOffice: "Region XIII", transportType: "10 WHEELER" });
   });
 });

@@ -4,7 +4,7 @@ import { PttApplicationsTable } from "@/components/ptt/applications-table";
 import { VersionFilter } from "@/components/ptc/version-filter";
 import { requireUser, userHasFeature } from "@/lib/auth";
 import { getOfficeChoices, getPttApplicationRecords, getPttTransportTypes, getPttValidityRules, getVersionContext } from "@/lib/data";
-import { decimalOrZero, formatDate, formatValidityDays } from "@/lib/ptc";
+import { decimalOrZero, formatAuditTimestamp, formatDate, formatValidityDays } from "@/lib/ptc";
 import { formatPttBoolean, PERMIT_GROUP_PTT, pttStatus } from "@/lib/ptt";
 import { pttCapacityCategoryLabel, pttValidityBasisLabel } from "@/lib/ptt-checks";
 import { pttValidityRuleConfig } from "@/lib/ptt-validity-rules";
@@ -78,7 +78,10 @@ export default async function PttApplicationsPage({ searchParams }: { searchPara
     issuedBySignatureForName: record.issuedBySignatureForName || "",
     manualRemarks: record.manualRemarks || "",
     remarks: record.remarks || "",
+    createdByName: record.createdByName || "",
+    createdAt: formatAuditTimestamp(record.createdAt),
     editedByName: record.editedByName || "",
+    editedAt: record.editedByName ? formatAuditTimestamp(record.updatedAt) : "",
     status: pttStatus(record)
   }));
 

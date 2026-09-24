@@ -128,11 +128,12 @@ function remarkBlocks(value: string | null | undefined) {
     .filter(Boolean);
 }
 
-function isSignatureRemark(block: string) {
+function isSystemGeneratedRemark(block: string) {
   const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
   return lines.length > 0 && lines.every((line) =>
     /^There's no signature in (Recommending Approval|Approved|Validated\/Inspected By|Issued By) field\.$/.test(line)
     || /^The signature in (Recommending Approval|Approved|Validated\/Inspected By|Issued By) field was signed ['‘]For['’] by .+ on behalf of the authorized signatory\.$/.test(line)
+    || /^There's no date in Date (Issued|Validated\/Inspected) field\.$/.test(line)
   );
 }
 
@@ -155,7 +156,7 @@ export function replaceGeneratedRemarks(
 ) {
   const previous = new Set(previousFindings.flatMap((finding) => remarkBlocks(finding)));
   const manualRemarks = remarkBlocks(existingRemarks)
-    .filter((block) => !previous.has(block) && !isSignatureRemark(block))
+    .filter((block) => !previous.has(block) && !isSystemGeneratedRemark(block))
     .join("\n\n");
   return mergeRemarks(manualRemarks, currentFindings);
 }

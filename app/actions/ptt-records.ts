@@ -10,7 +10,7 @@ import { parseGroundsWorkbook, parsePtcRecordsWorkbook, parsePttRecordsWorkbook 
 import { checkPtcImportWorkbook, checkPttImportWorkbook } from "@/lib/import-checker";
 import { ptcImportCheckContext, pttImportCheckContext } from "@/lib/import-checker-context";
 import { PERMIT_GROUP_PTC } from "@/lib/ptc";
-import { PERMIT_GROUP_PTT } from "@/lib/ptt";
+import { newPttApplicationPath, PERMIT_GROUP_PTT } from "@/lib/ptt";
 import { calculatePttFee, calculatePttValidity, checkPttVehicleCapacity, pttCapacityMaxFromCategory, pttFeeFinding, pttValidityFinding } from "@/lib/ptt-checks";
 import { defaultPttValidityRuleData, resolvedPttValidityRule } from "@/lib/ptt-validity-rules";
 import { prisma } from "@/lib/prisma";
@@ -31,8 +31,6 @@ export async function createPttApplicationRecordAction(formData: FormData) {
   if (!parsed.success) redirectWithToast("/ptt/applications/new", "error", "Could not read the PTT application form.");
 
   const versionId = nullableVersionId(formData.get("versionId"));
-  let recordId = "";
-
   try {
     const version = versionId ? await prisma.ptcVersion.findFirst({ where: { id: versionId, group: PERMIT_GROUP_PTT, active: true } }) : null;
     if (versionId && !version) redirectWithToast("/ptt/applications/new", "error", "Selected PTT Version was not found.");
@@ -42,7 +40,7 @@ export async function createPttApplicationRecordAction(formData: FormData) {
     if (checkResult.error) redirectWithToast("/ptt/applications/new", "error", checkResult.error);
     const remarks = mergeRemarks(pttData.remarks, (checkResult.checks ?? []).map((check) => check.findingMessage));
 
-    const record = await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
       const created = await tx.pttApplicationRecord.create({
         data: {
           group: PERMIT_GROUP_PTT,
@@ -59,14 +57,13 @@ export async function createPttApplicationRecordAction(formData: FormData) {
       });
       return created;
     });
-    recordId = record.id;
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
     redirectWithToast("/ptt/applications/new", "error", "Could not create the PTT application record.");
   }
 
   revalidatePttApplications();
-  redirectWithToast(`/ptt/applications/${recordId}`, "success", "PTT application created.");
+  redirectWithToast(newPttApplicationPath(versionId), "success", "PTT application created. Ready for a new record.");
 }
 
 export async function updatePttApplicationRecordAction(formData: FormData) {

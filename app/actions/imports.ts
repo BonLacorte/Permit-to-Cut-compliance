@@ -9,6 +9,7 @@ import { hashPassword, verifyPassword } from "@/lib/password";
 import { parseGroundsWorkbook, parsePtcRecordsWorkbook, parsePttRecordsWorkbook } from "@/lib/excel";
 import { checkPtcImportWorkbook, checkPttImportWorkbook } from "@/lib/import-checker";
 import { ptcImportCheckContext, pttImportCheckContext } from "@/lib/import-checker-context";
+import { canImportPreview, forceImportRequested } from "@/lib/import-policy";
 import { PERMIT_GROUP_PTC } from "@/lib/ptc";
 import { PERMIT_GROUP_PTT } from "@/lib/ptt";
 import { calculatePttFee, calculatePttValidity, checkPttVehicleCapacity, pttCapacityMaxFromCategory, pttFeeFinding, pttValidityFinding } from "@/lib/ptt-checks";
@@ -25,6 +26,7 @@ export async function importPtcRecordsAction(formData: FormData) {
   const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=imports");
   const file = formData.get("file");
   const selectedVersionId = nullableVersionId(formData.get("versionId"));
+  const forceImport = forceImportRequested(formData.get("forceImport"));
   if (!(file instanceof File)) redirectWithToast(returnTo, "error", "Upload a PTC Excel file.");
 
   const selectedVersion = selectedVersionId
@@ -33,10 +35,17 @@ export async function importPtcRecordsAction(formData: FormData) {
   if (selectedVersionId && !selectedVersion) redirectWithToast(returnTo, "error", "Selected import Version was not found or is archived.");
 
   let parsed;
+  let checkerErrorCount = 0;
+  let checkerWarningCount = 0;
+  let importedDespiteErrors = false;
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const preview = checkPtcImportWorkbook(buffer, await ptcImportCheckContext(selectedVersionId));
-    if (preview.errorCount > 0) {
+    checkerErrorCount = preview.errorCount;
+    checkerWarningCount = preview.warningCount;
+    importedDespiteErrors = forceImport && preview.errorCount > 0;
+    if (preview.rowsChecked === 0) redirectWithToast(returnTo, "error", "No PTC rows were found to import.");
+    if (!canImportPreview(preview, { forceImport })) {
       redirectWithToast(returnTo, "error", `Import checker found ${preview.errorCount} blocking error${preview.errorCount === 1 ? "" : "s"}. Fix the Excel file and check it again.`);
     }
     parsed = parsePtcRecordsWorkbook(buffer);
@@ -93,7 +102,7 @@ export async function importPtcRecordsAction(formData: FormData) {
   redirectWithToast(
     withVersionParam(returnTo, selectedVersionId || UNCATEGORIZED_VERSION),
     "success",
-    `Imported ${parsed.length} PTC record${parsed.length === 1 ? "" : "s"}. Assigned: ${assignedCount}. Unmatched types: ${unmatchedTypeCount}. Uncategorized: ${uncategorizedCount}.`
+    `${importedDespiteErrors ? `Imported ${parsed.length} PTC record${parsed.length === 1 ? "" : "s"} despite ${checkerErrorCount} checker error${checkerErrorCount === 1 ? "" : "s"} and ${checkerWarningCount} warning${checkerWarningCount === 1 ? "" : "s"}.` : `Imported ${parsed.length} PTC record${parsed.length === 1 ? "" : "s"}.`} Assigned: ${assignedCount}. Unmatched types: ${unmatchedTypeCount}. Uncategorized: ${uncategorizedCount}.`
   );
 }
 
@@ -102,6 +111,7 @@ export async function importPttRecordsAction(formData: FormData) {
   const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=imports");
   const file = formData.get("file");
   const selectedVersionId = nullableVersionId(formData.get("versionId"));
+  const forceImport = forceImportRequested(formData.get("forceImport"));
   if (!(file instanceof File)) redirectWithToast(returnTo, "error", "Upload a PTT Excel file.");
   if (!selectedVersionId) redirectWithToast(returnTo, "error", "Choose a PTT Version before importing PTT records.");
 
@@ -111,10 +121,17 @@ export async function importPttRecordsAction(formData: FormData) {
   if (!selectedVersion) redirectWithToast(returnTo, "error", "Selected PTT Version was not found or is archived.");
 
   let parsed;
+  let checkerErrorCount = 0;
+  let checkerWarningCount = 0;
+  let importedDespiteErrors = false;
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const preview = checkPttImportWorkbook(buffer, await pttImportCheckContext(selectedVersionId));
-    if (preview.errorCount > 0) {
+    checkerErrorCount = preview.errorCount;
+    checkerWarningCount = preview.warningCount;
+    importedDespiteErrors = forceImport && preview.errorCount > 0;
+    if (preview.rowsChecked === 0) redirectWithToast(returnTo, "error", "No PTT rows were found to import.");
+    if (!canImportPreview(preview, { forceImport, requiredSelectionPresent: Boolean(selectedVersionId) })) {
       redirectWithToast(returnTo, "error", `Import checker found ${preview.errorCount} blocking error${preview.errorCount === 1 ? "" : "s"}. Fix the Excel file and check it again.`);
     }
     parsed = parsePttRecordsWorkbook(buffer);
@@ -173,7 +190,9 @@ export async function importPttRecordsAction(formData: FormData) {
   redirectWithToast(
     returnTo,
     "success",
-    "Imported " + parsed.length + " PTT record" + (parsed.length === 1 ? "" : "s") + " into " + selectedVersion.name + ". Duplicate PTT Numbers are allowed and will be flagged in the PTT table."
+    (importedDespiteErrors
+      ? `Imported ${parsed.length} PTT record${parsed.length === 1 ? "" : "s"} into ${selectedVersion.name} despite ${checkerErrorCount} checker error${checkerErrorCount === 1 ? "" : "s"} and ${checkerWarningCount} warning${checkerWarningCount === 1 ? "" : "s"}.`
+      : `Imported ${parsed.length} PTT record${parsed.length === 1 ? "" : "s"} into ${selectedVersion.name}.`) + " Duplicate PTT Numbers are allowed and will be flagged in the PTT table."
   );
 }
 

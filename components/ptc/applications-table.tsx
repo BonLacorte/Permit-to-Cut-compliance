@@ -29,7 +29,10 @@ type Row = {
   selectedDocumentIds: string[];
   remarks: string;
   manualRemarks: string;
+  createdByName: string;
+  createdAt: string;
   editedByName: string;
+  editedAt: string;
   dateIssued: string;
   dateIssuedValue?: string | null;
   ptcNumber: string;
@@ -72,7 +75,7 @@ type Row = {
   ptcNumberDuplicate: boolean;
 };
 
-type SortKey = "versionName" | "applicantName" | "applicationTypeName" | "submittedCount" | "missingCount" | "status" | "editedByName" | "remarks" | "dateIssued" | "ptcNumber" | "regionalOffice" | "provincialOffice" | "municipality" | "barangay" | "treesApplied" | "treesApproved" | "seedlingsReplacement" | "recordedValidityDays" | "actualValidityDays" | "actualFeeAmount" | "recordedFeeAmount" | "officialReceiptNumber" | "feeDifferenceAmount" | "locExemptionDisplay" | "agriculturist" | "recommendingApproval" | "approved";
+type SortKey = "versionName" | "applicantName" | "applicationTypeName" | "submittedCount" | "missingCount" | "status" | "createdByName" | "createdAt" | "editedByName" | "editedAt" | "remarks" | "dateIssued" | "ptcNumber" | "regionalOffice" | "provincialOffice" | "municipality" | "barangay" | "treesApplied" | "treesApproved" | "seedlingsReplacement" | "recordedValidityDays" | "actualValidityDays" | "actualFeeAmount" | "recordedFeeAmount" | "officialReceiptNumber" | "feeDifferenceAmount" | "locExemptionDisplay" | "agriculturist" | "recommendingApproval" | "approved";
 
 function compareRows(a: Row, b: Row, key: SortKey) {
   const left = a[key];
@@ -141,7 +144,10 @@ export function ApplicationsTable({
             row.applicantName,
             row.applicationTypeName,
             row.status,
+            row.createdByName,
+            row.createdAt,
             row.editedByName,
+            row.editedAt,
             row.remarks,
             row.dateIssued,
             row.ptcNumber,
@@ -180,7 +186,7 @@ export function ApplicationsTable({
   const selectedRows = useMemo(() => rows.filter((row) => selectedIds.has(row.id)), [rows, selectedIds]);
   const allVisibleSelected = visible.length > 0 && visible.every((row) => selectedIds.has(row.id));
   const someVisibleSelected = visible.some((row) => selectedIds.has(row.id));
-  const tableColSpan = canBulkDelete ? 32 : 31;
+  const tableColSpan = canBulkDelete ? 35 : 34;
   const activeAssignmentOptions = versionOptions.filter((version) => version.id === "uncategorized" || version.active !== false);
   const bulkPreview = useMemo(() => {
     const targetIsUncategorized = bulkVersionId === "uncategorized";
@@ -306,7 +312,10 @@ export function ApplicationsTable({
               <th><button className="th-button" onClick={() => sortBy("approved")}>Approved{sortLabel("approved")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("status")}>Status{sortLabel("status")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("remarks")}>Remarks{sortLabel("remarks")}</button></th>
+              <th><button className="th-button" onClick={() => sortBy("createdByName")}>Created By{sortLabel("createdByName")}</button></th>
+              <th><button className="th-button" onClick={() => sortBy("createdAt")}>Created At{sortLabel("createdAt")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("editedByName")}>Edited By{sortLabel("editedByName")}</button></th>
+              <th><button className="th-button" onClick={() => sortBy("editedAt")}>Edited At{sortLabel("editedAt")}</button></th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -345,7 +354,10 @@ export function ApplicationsTable({
                 <td>{displayText(row.approved)}</td>
                 <td><StatusBadge status={row.status} /></td>
                 <td>{row.remarks || <span className="muted">No remarks</span>}</td>
+                <td>{row.createdByName || <span className="muted">Blank</span>}</td>
+                <td>{displayText(row.createdAt)}</td>
                 <td>{row.editedByName || <span className="muted">Blank</span>}</td>
+                <td>{displayText(row.editedAt)}</td>
                 <td><div className="actions compact-actions"><Link className="button secondary" href={`/ptc/applications/${row.id}`}>View</Link><EditApplicationButton record={{ ...row, remarks: row.manualRemarks, dateIssued: row.dateIssuedValue || "", returnTo: `/ptc/applications?version=${selectedVersionParam}` }} applicationTypes={applicationTypes} officeChoices={officeChoices} versionOptions={versionOptions} checkerAccess={checkerAccess} /><button className="button danger" type="button" onClick={() => setDeleting(row)}>Delete</button></div></td>
               </tr>
             ))}
@@ -411,7 +423,6 @@ export function ApplicationsTable({
     </>
   );
 }
-
 
 
 

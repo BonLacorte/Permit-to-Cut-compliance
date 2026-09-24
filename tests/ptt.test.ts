@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
 import { buildPttApplicationsWorkbook, buildPttImportTemplateWorkbook, parsePttRecordsWorkbook, PTT_IMPORT_COLUMNS } from "@/lib/excel";
-import { filterPttRecordsByProvincialOffice, filterPttRecordsByRegion, hasPttSourceReference, missingPttCompletionFields, pttDocumentSummaryRows, pttExportRows, pttStatus } from "@/lib/ptt";
+import { filterPttRecordsByProvincialOffice, filterPttRecordsByRegion, hasPttSourceReference, missingPttCompletionFields, newPttApplicationPath, pttDocumentSummaryRows, pttExportRows, pttStatus } from "@/lib/ptt";
 
 const completeRecord = {
   versionId: "ptt-version-default",
@@ -35,11 +35,19 @@ const completeRecord = {
   issuedBySignatureStatus: "Blank",
   issuedBySignatureForName: "",
   remarks: "Sample record",
+  createdByName: "Creator User",
+  createdAt: new Date("2026-05-11T00:00:00.000Z"),
   editedByName: "Admin User",
+  updatedAt: new Date("2026-05-12T01:30:00.000Z"),
   pttNumberDuplicate: true
 };
 
 describe("PTT helpers", () => {
+  it("returns to a new PTT form with the selected Version after creation", () => {
+    expect(newPttApplicationPath("ptt version/2026")).toBe("/ptt/applications/new?version=ptt%20version%2F2026");
+    expect(newPttApplicationPath(null)).toBe("/ptt/applications/new");
+  });
+
   it("marks a blank shell record as Pending", () => {
     expect(pttStatus({ versionId: "ptt-version-default" })).toBe("Pending");
   });
@@ -96,13 +104,24 @@ describe("PTT helpers", () => {
       "Issued By Date": "2026-05-11",
       "Issued By Signature": "Blank",
       Status: "Complete",
-      "Edited By": "Admin User"
+      "Created By": "Creator User",
+      "Created At": "2026-05-11 08:00 PHT",
+      "Edited By": "Admin User",
+      "Edited At": "2026-05-12 09:30 PHT"
     });
     expect(pttExportRows([completeRecord])[0]).not.toHaveProperty("Transport Type");
     expect(pttExportRows([completeRecord])[0]).not.toHaveProperty("Valid Until");
     expect(pttExportRows([completeRecord])[0]).not.toHaveProperty("Province");
     expect(pttExportRows([completeRecord])[0]).not.toHaveProperty("Validated/Inspected By Designation");
     expect(pttExportRows([completeRecord])[0]).not.toHaveProperty("Issued By Designation");
+  });
+
+  it("leaves unedited PTT audit fields blank in exports", () => {
+    expect(pttExportRows([{ ...completeRecord, editedByName: "", updatedAt: new Date("2026-05-13T00:00:00.000Z") }])[0]).toMatchObject({
+      "Created By": "Creator User",
+      "Edited By": "",
+      "Edited At": ""
+    });
   });
 
   it("filters PTT records by Region for export", () => {

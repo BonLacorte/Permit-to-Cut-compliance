@@ -5,7 +5,7 @@ import { VersionFilter } from "@/components/ptc/version-filter";
 import { requireUser, userHasFeature } from "@/lib/auth";
 import { getApplicationTypesWithDocuments, getOfficeChoices, getReportData, getVersionContext } from "@/lib/data";
 import { dashboardRegionOptions, filterDashboardAuditsByRegion } from "@/lib/dashboard";
-import { blankDisplay, decimalOrZero, displayPtcField, displayLocExemption, displayReplantedSeedlings, feesMatch, feeDifference, formatDate, formatFee, formatSignedFeeDifference, formatValidityDays } from "@/lib/ptc";
+import { blankDisplay, decimalOrZero, displayPtcField, displayLocExemption, displayReplantedSeedlings, feesMatch, feeDifference, formatAuditTimestamp, formatDate, formatFee, formatSignedFeeDifference, formatValidityDays } from "@/lib/ptc";
 import { FeatureKey, Role } from "@prisma/client";
 
 function formNumberValue(value: unknown) {
@@ -47,7 +47,10 @@ export default async function ApplicationsPage({ searchParams }: { searchParams?
     selectedDocumentIds: audit.selectedDocuments.map((doc) => doc.id),
     remarks: audit.remarks || "",
     manualRemarks: audit.manualRemarks || "",
+    createdByName: audit.createdByName || "",
+    createdAt: formatAuditTimestamp(audit.createdAt),
     editedByName: audit.editedByName || "",
+    editedAt: audit.editedByName ? formatAuditTimestamp(audit.updatedAt) : "",
     dateIssued: formatDate(audit.dateIssued),
     dateIssuedValue: audit.dateIssued ? new Date(audit.dateIssued).toISOString().slice(0, 10) : "",
     ptcNumber: audit.ptcNumber || "",
@@ -125,7 +128,6 @@ export default async function ApplicationsPage({ searchParams }: { searchParams?
     </div>
   );
 }
-
 
 
 

@@ -64,11 +64,14 @@ type Row = {
   issuedBySignatureForName?: string | null;
   manualRemarks: string;
   remarks: string;
+  createdByName: string;
+  createdAt: string;
   editedByName: string;
+  editedAt: string;
   status: PttStatus;
 };
 
-type SortKey = "versionName" | "pttNumber" | "dateIssued" | "transporterName" | "regionalOffice" | "provincialOffice" | "ptcNumber" | "volumeBoardFeetAmount" | "originOfLumber" | "destination" | "transportType" | "actualTransportDisplay" | "amountPaidAmount" | "actualFeeAmount" | "officialReceiptNumber" | "validityBasisDisplay" | "recordedValidityDays" | "actualValidityDays" | "status" | "remarks" | "editedByName";
+type SortKey = "versionName" | "pttNumber" | "dateIssued" | "transporterName" | "regionalOffice" | "provincialOffice" | "ptcNumber" | "volumeBoardFeetAmount" | "originOfLumber" | "destination" | "transportType" | "actualTransportDisplay" | "amountPaidAmount" | "actualFeeAmount" | "officialReceiptNumber" | "validityBasisDisplay" | "recordedValidityDays" | "actualValidityDays" | "status" | "remarks" | "createdByName" | "createdAt" | "editedByName" | "editedAt";
 
 function compareRows(a: Row, b: Row, key: SortKey) {
   const left = a[key];
@@ -148,7 +151,10 @@ export function PttApplicationsTable({
             row.actualValidityDisplay,
             row.status,
             row.remarks,
-            row.editedByName
+            row.createdByName,
+            row.createdAt,
+            row.editedByName,
+            row.editedAt
           ]
             .join(" ")
             .toLowerCase()
@@ -242,7 +248,10 @@ export function PttApplicationsTable({
               <th><button className="th-button" onClick={() => sortBy("actualValidityDays")}>Actual Validity{sortLabel("actualValidityDays")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("status")}>Status{sortLabel("status")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("remarks")}>Remarks{sortLabel("remarks")}</button></th>
+              <th><button className="th-button" onClick={() => sortBy("createdByName")}>Created By{sortLabel("createdByName")}</button></th>
+              <th><button className="th-button" onClick={() => sortBy("createdAt")}>Created At{sortLabel("createdAt")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("editedByName")}>Edited By{sortLabel("editedByName")}</button></th>
+              <th><button className="th-button" onClick={() => sortBy("editedAt")}>Edited At{sortLabel("editedAt")}</button></th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -268,11 +277,14 @@ export function PttApplicationsTable({
                 <td>{displayText(row.actualValidityDisplay)}</td>
                 <td><StatusBadge status={row.status} /></td>
                 <td>{row.remarks || <span className="muted">No remarks</span>}</td>
+                <td>{row.createdByName || <span className="muted">Blank</span>}</td>
+                <td>{displayText(row.createdAt)}</td>
                 <td>{row.editedByName || <span className="muted">Blank</span>}</td>
+                <td>{displayText(row.editedAt)}</td>
                 <td><div className="actions compact-actions"><Link className="button secondary" href={`/ptt/applications/${row.id}`}>View</Link><button className="button secondary" type="button" onClick={() => openEdit(row)}>Edit</button><button className="button danger" type="button" onClick={() => setDeleting(row)}>Delete</button></div></td>
               </tr>
             ))}
-            {visible.length === 0 ? <tr><td colSpan={21}>No PTT records found.</td></tr> : null}
+            {visible.length === 0 ? <tr><td colSpan={24}>No PTT records found.</td></tr> : null}
           </tbody>
         </table>
       </div>
