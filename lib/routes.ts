@@ -18,6 +18,7 @@ export const routes = {
     feesCalculator: "/ptc/fees-calculator"
   },
   ptt: {
+    dashboard: "/ptt/dashboard",
     applications: "/ptt/applications",
     application: (id: string) => `/ptt/applications/${id}`,
     newApplication: (version?: string | null) => withVersion("/ptt/applications/new", version)

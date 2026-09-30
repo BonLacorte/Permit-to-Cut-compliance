@@ -107,6 +107,7 @@ export function ApplicationsTable({
   officeChoices,
   versionOptions,
   selectedVersionParam,
+  returnTo,
   allVersionRecordCount,
   canBulkDelete = false,
   checkerAccess
@@ -116,6 +117,7 @@ export function ApplicationsTable({
   officeChoices: OfficeChoice[];
   versionOptions: VersionOption[];
   selectedVersionParam: string;
+  returnTo: string;
   allVersionRecordCount: number;
   canBulkDelete?: boolean;
   checkerAccess: { fees: boolean; validity: boolean };
@@ -358,7 +360,7 @@ export function ApplicationsTable({
                 <td>{displayText(row.createdAt)}</td>
                 <td>{row.editedByName || <span className="muted">Blank</span>}</td>
                 <td>{displayText(row.editedAt)}</td>
-                <td><div className="actions compact-actions"><Link className="button secondary" href={`/ptc/applications/${row.id}`}>View</Link><EditApplicationButton record={{ ...row, remarks: row.manualRemarks, dateIssued: row.dateIssuedValue || "", returnTo: `/ptc/applications?version=${selectedVersionParam}` }} applicationTypes={applicationTypes} officeChoices={officeChoices} versionOptions={versionOptions} checkerAccess={checkerAccess} /><button className="button danger" type="button" onClick={() => setDeleting(row)}>Delete</button></div></td>
+                <td><div className="actions compact-actions"><Link className="button secondary" href={`/ptc/applications/${row.id}`}>View</Link><EditApplicationButton record={{ ...row, remarks: row.manualRemarks, dateIssued: row.dateIssuedValue || "", returnTo }} applicationTypes={applicationTypes} officeChoices={officeChoices} versionOptions={versionOptions} checkerAccess={checkerAccess} /><button className="button danger" type="button" onClick={() => setDeleting(row)}>Delete</button></div></td>
               </tr>
             ))}
             {visible.length === 0 ? <tr><td colSpan={tableColSpan}>No records found.</td></tr> : null}

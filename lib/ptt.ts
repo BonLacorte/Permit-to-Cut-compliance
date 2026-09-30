@@ -128,6 +128,24 @@ export function filterPttRecordsByProvincialOffice<T extends Pick<PttDisplayReco
   return records.filter((record) => pttProvincialOfficeName(record) === provincialOffice);
 }
 
+export function pttRegionOptions<T extends Pick<PttDisplayRecord, "regionalOffice">>(records: T[]) {
+  const regions = Array.from(new Set(records.map(pttRegionName))).sort((a, b) => {
+    if (a === "No Region") return 1;
+    if (b === "No Region") return -1;
+    return a.localeCompare(b);
+  });
+  return ["All", ...regions];
+}
+
+export function pttProvincialOfficeOptions<T extends Pick<PttDisplayRecord, "provincialOffice">>(records: T[]) {
+  const offices = Array.from(new Set(records.map(pttProvincialOfficeName))).sort((a, b) => {
+    if (a === "No Provincial Office") return 1;
+    if (b === "No Provincial Office") return -1;
+    return a.localeCompare(b);
+  });
+  return ["All", ...offices];
+}
+
 export function displayPttName(record: Pick<PttDisplayRecord, "transporterName">) {
   return String(record.transporterName || "").trim() || "Blank PTT Application";
 }

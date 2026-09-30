@@ -23,7 +23,7 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
           <VersionFilter options={versionContext.options} selected={versionContext.selectedVersionParam} path="/ptc/dashboard" />
         </div>
       </div>
-      <DashboardMetrics data={dashboard} />
+      <DashboardMetrics data={dashboard} version={versionContext.selectedVersionParam} />
     </div>
   );
 }

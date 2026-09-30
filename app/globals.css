@@ -873,10 +873,7 @@ tbody tr:hover {
 .dashboard-stat-card {
   border: 1px solid var(--line);
   color: inherit;
-  cursor: pointer;
-  text-align: left;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
-  width: 100%;
 }
 
 .dashboard-stat-card:hover,
@@ -891,6 +888,19 @@ tbody tr:hover {
   display: flex;
   gap: 10px;
   justify-content: space-between;
+}
+
+.dashboard-stat-toggle {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  text-align: left;
+  width: 100%;
 }
 
 .dashboard-stat-main em,
@@ -910,9 +920,22 @@ tbody tr:hover {
 
 .dashboard-region-row {
   align-items: center;
+  border-radius: 6px;
+  color: inherit;
   display: grid;
   gap: 8px;
   grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 6px 8px;
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.dashboard-region-row:hover,
+.dashboard-region-row:focus-visible {
+  background: #e6fffb;
+  color: var(--brand-dark);
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .dashboard-region-row span {
@@ -923,6 +946,48 @@ tbody tr:hover {
 .dashboard-region-row strong {
   color: var(--ink);
   font-size: 15px;
+}
+
+.dashboard-office-list,
+.dashboard-office-group,
+.dashboard-office-children {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-office-group {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.dashboard-office-row {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.dashboard-office-row > a {
+  align-items: center;
+  border-radius: 6px;
+  color: inherit;
+  display: flex;
+  flex: 1;
+  justify-content: space-between;
+  padding: 6px 8px;
+  text-decoration: none;
+}
+
+.dashboard-office-row > a:hover,
+.dashboard-office-row > a:focus-visible {
+  background: #e6fffb;
+  color: var(--brand-dark);
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.dashboard-office-children {
+  margin-left: 18px;
 }
 
 .compact-filter {

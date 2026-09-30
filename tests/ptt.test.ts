@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
 import { buildPttApplicationsWorkbook, buildPttImportTemplateWorkbook, parsePttRecordsWorkbook, PTT_IMPORT_COLUMNS } from "@/lib/excel";
-import { filterPttRecordsByProvincialOffice, filterPttRecordsByRegion, hasPttSourceReference, missingPttCompletionFields, newPttApplicationPath, pttDocumentSummaryRows, pttExportRows, pttStatus } from "@/lib/ptt";
+import { filterPttRecordsByProvincialOffice, filterPttRecordsByRegion, hasPttSourceReference, missingPttCompletionFields, newPttApplicationPath, pttDocumentSummaryRows, pttExportRows, pttProvincialOfficeOptions, pttRegionOptions, pttStatus } from "@/lib/ptt";
 
 const completeRecord = {
   versionId: "ptt-version-default",
@@ -151,6 +151,19 @@ describe("PTT helpers", () => {
     expect(filterPttRecordsByProvincialOffice(records, "Quezon I").map((record) => record.pttNumber)).toEqual(["142224"]);
     expect(filterPttRecordsByProvincialOffice(records, "Agusan del Norte").map((record) => record.pttNumber)).toEqual(["777"]);
     expect(filterPttRecordsByProvincialOffice(records, "No Provincial Office").map((record) => record.pttNumber)).toEqual(["888"]);
+  });
+
+  it("derives PTT Region and Provincial Office filter options from the selected Region", () => {
+    const records = [
+      completeRecord,
+      { ...completeRecord, pttNumber: "999", regionalOffice: "Region VIII", provincialOffice: "Leyte" },
+      { ...completeRecord, pttNumber: "777", regionalOffice: "Region XIII", provincialOffice: "Agusan del Norte" },
+      { ...completeRecord, pttNumber: "888", regionalOffice: null, provincialOffice: null }
+    ];
+
+    expect(pttRegionOptions(records)).toEqual(["All", "Region IV-A", "Region VIII", "Region XIII", "No Region"]);
+    expect(pttProvincialOfficeOptions(filterPttRecordsByRegion(records, "Region VIII"))).toEqual(["All", "Leyte"]);
+    expect(pttProvincialOfficeOptions(filterPttRecordsByRegion(records, "No Region"))).toEqual(["All", "No Provincial Office"]);
   });
 
   it("builds a PTT Document Summary sheet from Certificate of Quantity/Volume Attached", () => {

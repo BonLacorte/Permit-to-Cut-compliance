@@ -7,8 +7,36 @@ export type DashboardRegionBreakdown = {
   share: number;
 };
 
+export const DASHBOARD_METRIC_IDS = [
+  "total",
+  "complete",
+  "incomplete",
+  "pending",
+  "fee-mismatches",
+  "fee-variance-amount",
+  "duplicate-ptc",
+  "cancelled",
+  "replanted-yes",
+  "replanted-no"
+] as const;
+
+export type DashboardMetricId = typeof DASHBOARD_METRIC_IDS[number];
+
+export const dashboardMetricOptions: Array<{ id: DashboardMetricId; label: string }> = [
+  { id: "total", label: "Total Records" },
+  { id: "complete", label: "Complete Records" },
+  { id: "incomplete", label: "Incomplete Records" },
+  { id: "pending", label: "Pending Records" },
+  { id: "fee-mismatches", label: "Fee Mismatches" },
+  { id: "fee-variance-amount", label: "Fee Variance Amount (Fee Mismatches)" },
+  { id: "duplicate-ptc", label: "Duplicate PTC Numbers" },
+  { id: "cancelled", label: "Cancelled Applications" },
+  { id: "replanted-yes", label: "Replanted Seedlings: Yes" },
+  { id: "replanted-no", label: "Replanted Seedlings: No" }
+];
+
 export type DashboardMetric = {
-  id: string;
+  id: DashboardMetricId;
   label: string;
   total: number;
   share: number;
@@ -48,6 +76,37 @@ export type DashboardData = {
 const ALL_REGIONS = "All";
 const NO_REGION = "No Region";
 const NO_PROVINCIAL_OFFICE = "No Provincial Office";
+
+const dashboardMetricPredicates: Record<DashboardMetricId, (audit: RecordAudit) => boolean> = {
+  total: () => true,
+  complete: (audit) => audit.status === "Complete",
+  incomplete: (audit) => audit.status === "Incomplete",
+  pending: (audit) => audit.status === "Pending",
+  "fee-mismatches": (audit) => !feesMatch(audit),
+  "fee-variance-amount": (audit) => !feesMatch(audit),
+  "duplicate-ptc": (audit) => !!audit.ptcNumberDuplicate,
+  cancelled: (audit) => isCancelledRecord(audit),
+  "replanted-yes": (audit) => audit.replantedSeedlings === true,
+  "replanted-no": (audit) => audit.replantedSeedlings === false
+};
+
+export function resolveDashboardMetric(value?: string | string[]) {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return DASHBOARD_METRIC_IDS.includes(candidate as DashboardMetricId) ? candidate as DashboardMetricId : "total";
+}
+
+export function filterDashboardAuditsByMetric(audits: RecordAudit[], metric: DashboardMetricId) {
+  return audits.filter(dashboardMetricPredicates[metric]);
+}
+
+export function dashboardApplicationsHref({ version, region, provincialOffice, metric }: { version: string; region: string; provincialOffice?: string; metric: DashboardMetricId }) {
+  const params = new URLSearchParams();
+  params.set("version", version);
+  if (region !== ALL_REGIONS) params.set("region", region);
+  if (provincialOffice && provincialOffice !== ALL_REGIONS) params.set("provincialOffice", provincialOffice);
+  if (metric !== "total") params.set("metric", metric);
+  return `/ptc/applications?${params.toString()}`;
+}
 
 export function dashboardRegionName(record: Pick<RecordAudit, "regionalOffice">) {
   return String(record.regionalOffice || "").trim() || NO_REGION;
@@ -104,7 +163,7 @@ function regionalAmountBreakdown(audits: RecordAudit[], regions: string[], amoun
 }
 
 function amountMetric(
-  id: string,
+  id: DashboardMetricId,
   label: string,
   audits: RecordAudit[],
   regions: string[],
@@ -121,7 +180,7 @@ function amountMetric(
   };
 }
 function metric(
-  id: string,
+  id: DashboardMetricId,
   label: string,
   audits: RecordAudit[],
   regions: string[],
@@ -218,6 +277,15 @@ export function dashboardRegionOptions(audits: RecordAudit[]) {
   return [ALL_REGIONS, ...uniqueRegions(audits)];
 }
 
+export function dashboardProvincialOfficeOptions(audits: RecordAudit[]) {
+  const offices = Array.from(new Set(audits.map(dashboardProvincialOfficeName))).sort((a, b) => {
+    if (a === NO_PROVINCIAL_OFFICE) return 1;
+    if (b === NO_PROVINCIAL_OFFICE) return -1;
+    return a.localeCompare(b);
+  });
+  return [ALL_REGIONS, ...offices];
+}
+
 export function filterDashboardAuditsByRegion(audits: RecordAudit[], region: string) {
   if (!region || region === ALL_REGIONS) return audits;
   return audits.filter((audit) => dashboardRegionName(audit) === region);
@@ -235,26 +303,26 @@ export function buildDashboardData(audits: RecordAudit[], requiredDocuments: Req
     {
       id: "status",
       metrics: [
-        metric("total", "Total Records", audits, regions, totalRecords, () => true),
-        metric("complete", "Complete Records", audits, regions, totalRecords, (audit) => audit.status === "Complete"),
-        metric("incomplete", "Incomplete Records", audits, regions, totalRecords, (audit) => audit.status === "Incomplete"),
-        metric("pending", "Pending Records", audits, regions, totalRecords, (audit) => audit.status === "Pending")
+        metric("total", "Total Records", audits, regions, totalRecords, dashboardMetricPredicates.total),
+        metric("complete", "Complete Records", audits, regions, totalRecords, dashboardMetricPredicates.complete),
+        metric("incomplete", "Incomplete Records", audits, regions, totalRecords, dashboardMetricPredicates.incomplete),
+        metric("pending", "Pending Records", audits, regions, totalRecords, dashboardMetricPredicates.pending)
       ]
     },
     {
       id: "flags",
       metrics: [
-        metric("fee-mismatches", "Fee Mismatches", audits, regions, totalRecords, (audit) => !feesMatch(audit)),
+        metric("fee-mismatches", "Fee Mismatches", audits, regions, totalRecords, dashboardMetricPredicates["fee-mismatches"]),
         amountMetric("fee-variance-amount", "Fee Variance Amount", audits, regions, feeVariance),
-        metric("duplicate-ptc", "Duplicate PTC Numbers", audits, regions, totalRecords, (audit) => !!audit.ptcNumberDuplicate),
-        metric("cancelled", "Cancelled Applications", audits, regions, totalRecords, (audit) => isCancelledRecord(audit))
+        metric("duplicate-ptc", "Duplicate PTC Numbers", audits, regions, totalRecords, dashboardMetricPredicates["duplicate-ptc"]),
+        metric("cancelled", "Cancelled Applications", audits, regions, totalRecords, dashboardMetricPredicates.cancelled)
       ]
     },
     {
       id: "replanted",
       metrics: [
-        metric("replanted-yes", "Replanted Seedlings: Yes", audits, regions, totalRecords, (audit) => audit.replantedSeedlings === true),
-        metric("replanted-no", "Replanted Seedlings: No", audits, regions, totalRecords, (audit) => audit.replantedSeedlings === false)
+        metric("replanted-yes", "Replanted Seedlings: Yes", audits, regions, totalRecords, dashboardMetricPredicates["replanted-yes"]),
+        metric("replanted-no", "Replanted Seedlings: No", audits, regions, totalRecords, dashboardMetricPredicates["replanted-no"])
       ]
     }
   ];
