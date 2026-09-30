@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDashboardData, dashboardRegionOptions, filterDashboardAuditsByProvincialOffice, filterDashboardAuditsByRegion, topApplicationSummary, topApplicationSummaryByRegion, topMissingDocumentsByRegion } from "@/lib/dashboard";
+import { buildDashboardData, dashboardApplicationsHref, dashboardMetricOptions, dashboardProvincialOfficeOptions, dashboardRegionOptions, filterDashboardAuditsByMetric, filterDashboardAuditsByProvincialOffice, filterDashboardAuditsByRegion, resolveDashboardMetric, topApplicationSummary, topApplicationSummaryByRegion, topMissingDocumentsByRegion } from "@/lib/dashboard";
 import { auditRecord, type RecordRef, type RequiredDocumentRef } from "@/lib/reporting";
 
 const versionId = "version-2023-2024";
@@ -76,6 +76,34 @@ const records: RecordRef[] = [
 const audits = records.map((record) => auditRecord(record, requiredDocuments));
 
 describe("dashboard metrics", () => {
+  it("filters every dashboard view and treats fee variance as fee mismatches", () => {
+    expect(filterDashboardAuditsByMetric(audits, "total").map((audit) => audit.id)).toEqual(["r1", "r2", "r3", "r4"]);
+    expect(filterDashboardAuditsByMetric(audits, "complete").map((audit) => audit.id)).toEqual(["r1"]);
+    expect(filterDashboardAuditsByMetric(audits, "incomplete").map((audit) => audit.id)).toEqual(["r2", "r3"]);
+    expect(filterDashboardAuditsByMetric(audits, "pending").map((audit) => audit.id)).toEqual(["r4"]);
+    expect(filterDashboardAuditsByMetric(audits, "fee-mismatches").map((audit) => audit.id)).toEqual(["r2", "r4"]);
+    expect(filterDashboardAuditsByMetric(audits, "fee-variance-amount").map((audit) => audit.id)).toEqual(["r2", "r4"]);
+    expect(filterDashboardAuditsByMetric(audits, "duplicate-ptc").map((audit) => audit.id)).toEqual(["r2"]);
+    expect(filterDashboardAuditsByMetric(audits, "cancelled").map((audit) => audit.id)).toEqual(["r3"]);
+    expect(filterDashboardAuditsByMetric(audits, "replanted-yes").map((audit) => audit.id)).toEqual(["r1"]);
+    expect(filterDashboardAuditsByMetric(audits, "replanted-no").map((audit) => audit.id)).toEqual(["r2"]);
+    expect(filterDashboardAuditsByMetric(filterDashboardAuditsByRegion(audits, "Region VIII"), "cancelled").map((audit) => audit.id)).toEqual(["r3"]);
+    expect(filterDashboardAuditsByMetric(filterDashboardAuditsByRegion(audits, "No Region"), "fee-mismatches").map((audit) => audit.id)).toEqual(["r4"]);
+  });
+
+  it("validates dashboard metric parameters and preserves Application filters in metric links", () => {
+    expect(resolveDashboardMetric()).toBe("total");
+    expect(resolveDashboardMetric("not-a-metric")).toBe("total");
+    expect(resolveDashboardMetric(["duplicate-ptc", "cancelled"])).toBe("duplicate-ptc");
+    expect(dashboardMetricOptions.find((metric) => metric.id === "fee-variance-amount")?.label).toBe("Fee Variance Amount (Fee Mismatches)");
+    expect(dashboardApplicationsHref({ version: "new forms", region: "Region IV-A", metric: "duplicate-ptc" }))
+      .toBe("/ptc/applications?version=new+forms&region=Region+IV-A&metric=duplicate-ptc");
+    expect(dashboardApplicationsHref({ version: "new-forms", region: "All", metric: "total" }))
+      .toBe("/ptc/applications?version=new-forms");
+    expect(dashboardApplicationsHref({ version: "new forms", region: "Region IV-A", provincialOffice: "Quezon I", metric: "duplicate-ptc" }))
+      .toBe("/ptc/applications?version=new+forms&region=Region+IV-A&provincialOffice=Quezon+I&metric=duplicate-ptc");
+  });
+
   it("builds regional breakdowns with share of the selected card total", () => {
     const data = buildDashboardData(audits, requiredDocuments);
     const total = data.metricRows[0].metrics.find((metric) => metric.id === "total")!;
@@ -100,7 +128,7 @@ describe("dashboard metrics", () => {
     expect(flags.find((metric) => metric.id === "cancelled")?.total).toBe(1);
     expect(replanted.find((metric) => metric.id === "replanted-yes")?.total).toBe(1);
     expect(replanted.find((metric) => metric.id === "replanted-no")?.total).toBe(1);
-    expect(replanted.find((metric) => metric.id === "replanted-blank")).toBeUndefined();
+    expect(replanted).toHaveLength(2);
   });
 
   it("totals fee variance amount in the flags row and breaks it down by region", () => {
@@ -155,6 +183,12 @@ describe("dashboard metrics", () => {
     expect(filterDashboardAuditsByRegion(audits, "All").map((audit) => audit.id)).toEqual(["r1", "r2", "r3", "r4"]);
     expect(filterDashboardAuditsByRegion(audits, "Region IV-A").map((audit) => audit.id)).toEqual(["r1"]);
     expect(filterDashboardAuditsByRegion(audits, "No Region").map((audit) => audit.id)).toEqual(["r4"]);
+  });
+
+  it("derives Provincial Office options from the selected Region, including blank offices", () => {
+    expect(dashboardProvincialOfficeOptions(filterDashboardAuditsByRegion(audits, "Region VIII"))).toEqual(["All", "Quezon II"]);
+    expect(dashboardProvincialOfficeOptions(filterDashboardAuditsByRegion(audits, "No Region"))).toEqual(["All", "No Provincial Office"]);
+    expect(dashboardProvincialOfficeOptions(audits)).toEqual(["All", "Quezon I", "Quezon II", "No Provincial Office"]);
   });
 
   it("filters PTC export audits by selected Region XIII while All remains unfiltered", () => {

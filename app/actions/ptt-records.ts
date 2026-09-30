@@ -150,3 +150,88 @@ export async function deletePttApplicationRecordAction(formData: FormData) {
   revalidatePttApplications();
   redirectWithToast("/ptt/applications", "success", "PTT application deleted.");
 }
+
+export async function bulkDeletePttApplicationRecordsAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const returnTo = safeReturnTo(formData.get("returnTo"), "/ptt/applications");
+  const ids = [...new Set(formData.getAll("pttApplicationRecordIds").map(String).filter(Boolean))];
+  if (ids.length === 0) redirectWithToast(returnTo, "error", "Select at least one PTT application to delete.");
+
+  const records = await prisma.pttApplicationRecord.findMany({
+    where: { id: { in: ids }, group: PERMIT_GROUP_PTT },
+    select: { id: true }
+  });
+  if (records.length !== ids.length) {
+    redirectWithToast(returnTo, "error", "Some selected PTT applications were already deleted or are not PTT records.");
+  }
+
+  const recordIds = records.map((record) => record.id);
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.pttApplicationRecord.deleteMany({ where: { id: { in: recordIds }, group: PERMIT_GROUP_PTT } });
+      await tx.activityLog.create({
+        data: {
+          userId: admin.id,
+          action: "BULK_DELETE_PTT_RECORDS",
+          targetType: "ptt_application_record",
+          metadata: { deletedCount: recordIds.length, recordIds }
+        }
+      });
+    });
+  } catch {
+    redirectWithToast(returnTo, "error", "Could not delete the selected PTT applications.");
+  }
+
+  revalidatePttApplications();
+  redirectWithToast(returnTo, "success", `Deleted ${recordIds.length} PTT application${recordIds.length === 1 ? "" : "s"}.`);
+}
+
+export async function bulkAssignPttApplicationVersionAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const returnTo = safeReturnTo(formData.get("returnTo"), "/ptt/applications");
+  const ids = [...new Set(formData.getAll("pttApplicationRecordIds").map(String).filter(Boolean))];
+  const targetVersionId = nullableVersionId(formData.get("versionId"));
+  if (ids.length === 0) redirectWithToast(returnTo, "error", "Select at least one PTT application to assign a Version.");
+
+  const targetVersion = targetVersionId
+    ? await prisma.ptcVersion.findFirst({ where: { id: targetVersionId, group: PERMIT_GROUP_PTT, active: true }, select: { id: true, name: true } })
+    : null;
+  if (targetVersionId && !targetVersion) redirectWithToast(returnTo, "error", "Selected PTT Version was not found or is archived.");
+
+  const records = await prisma.pttApplicationRecord.findMany({
+    where: { id: { in: ids }, group: PERMIT_GROUP_PTT },
+    select: { id: true, versionId: true }
+  });
+  if (records.length !== ids.length) {
+    redirectWithToast(returnTo, "error", "Some selected PTT applications were already deleted or are not PTT records.");
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const record of records) {
+        await tx.pttApplicationRecord.update({
+          where: { id: record.id },
+          data: { versionId: targetVersionId, editedById: admin.id }
+        });
+        await tx.activityLog.create({
+          data: {
+            userId: admin.id,
+            action: "ASSIGN_PTT_VERSION",
+            targetType: "ptt_application_record",
+            targetId: record.id,
+            metadata: {
+              previousVersionId: record.versionId,
+              newVersionId: targetVersionId,
+              newVersionName: targetVersion?.name || "Uncategorized"
+            }
+          }
+        });
+      }
+    });
+  } catch {
+    redirectWithToast(returnTo, "error", "Could not assign the selected PTT Version.");
+  }
+
+  revalidatePttApplications();
+  redirectWithToast(returnTo, "success", `Assigned Version to ${records.length} PTT application${records.length === 1 ? "" : "s"}.`);
+}

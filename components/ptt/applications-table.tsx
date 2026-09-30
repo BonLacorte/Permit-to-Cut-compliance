@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { deletePttApplicationRecordAction, updatePttApplicationRecordAction } from "@/app/actions";
+import { bulkAssignPttApplicationVersionAction, bulkDeletePttApplicationRecordsAction, deletePttApplicationRecordAction, updatePttApplicationRecordAction } from "@/app/actions";
 import { PttRecordFields, type PttTransportTypeOption, type PttValidityRuleOption } from "@/components/ptt/record-fields";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -100,7 +100,9 @@ export function PttApplicationsTable({
   transportTypes,
   validityRules,
   versionOptions,
-  selectedVersionParam
+  selectedVersionParam,
+  returnTo,
+  canBulkDelete = false
 }: {
   checkerAccess: { fees: boolean; validity: boolean; vehicle: boolean };
   rows: Row[];
@@ -109,6 +111,8 @@ export function PttApplicationsTable({
   validityRules: PttValidityRuleOption[];
   versionOptions: VersionOption[];
   selectedVersionParam: string;
+  returnTo: string;
+  canBulkDelete?: boolean;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [query, setQuery] = useState("");
@@ -117,6 +121,10 @@ export function PttApplicationsTable({
   const [sort, setSort] = useState<{ key: SortKey; direction: "asc" | "desc" }>({ key: "dateIssued", direction: "desc" });
   const [editing, setEditing] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState<Row | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkAssigning, setBulkAssigning] = useState(false);
+  const [bulkVersionId, setBulkVersionId] = useState(selectedVersionParam);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [findings, setFindings] = useState<string[]>([]);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -169,6 +177,11 @@ export function PttApplicationsTable({
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const visible = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const selectedRows = useMemo(() => rows.filter((row) => selectedIds.has(row.id)), [rows, selectedIds]);
+  const allVisibleSelected = visible.length > 0 && visible.every((row) => selectedIds.has(row.id));
+  const someVisibleSelected = visible.some((row) => selectedIds.has(row.id));
+  const tableColSpan = canBulkDelete ? 25 : 24;
+  const activeAssignmentOptions = versionOptions.filter((version) => version.id === "uncategorized" || version.active !== false);
 
   function sortBy(key: SortKey) {
     setSort((current) => ({
@@ -180,6 +193,26 @@ export function PttApplicationsTable({
   function sortLabel(key: SortKey) {
     if (sort.key !== key) return "";
     return sort.direction === "asc" ? " asc" : " desc";
+  }
+
+  function toggleRow(id: string, checked: boolean) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleVisible(checked: boolean) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const row of visible) {
+        if (checked) next.add(row.id);
+        else next.delete(row.id);
+      }
+      return next;
+    });
   }
 
   function openEdit(row: Row) {
@@ -225,10 +258,26 @@ export function PttApplicationsTable({
         </label>
       </div>
 
+      {canBulkDelete ? (
+        <div className="bulk-action-bar">
+          <span>{selectedRows.length} selected</span>
+          <div className="actions compact-actions">
+            <button className="button secondary" type="button" disabled={selectedRows.length === 0} onClick={() => setSelectedIds(new Set())}>Clear Selection</button>
+            {selectedRows.length > 0 ? <button className="button secondary" type="button" onClick={() => { setBulkVersionId(selectedVersionParam); setBulkAssigning(true); }}>Assign Version</button> : null}
+            {selectedRows.length > 0 ? <button className="button danger" type="button" onClick={() => setBulkDeleting(true)}>Delete Selected</button> : null}
+          </div>
+        </div>
+      ) : null}
+
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
+              {canBulkDelete ? (
+                <th className="selection-cell">
+                  <input aria-label="Select visible PTT applications" checked={allVisibleSelected} data-partial={someVisibleSelected && !allVisibleSelected ? "true" : undefined} disabled={visible.length === 0} type="checkbox" onChange={(event) => toggleVisible(event.target.checked)} />
+                </th>
+              ) : null}
               <th><button className="th-button" onClick={() => sortBy("dateIssued")}>Date Issued{sortLabel("dateIssued")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("pttNumber")}>PTT Number{sortLabel("pttNumber")}</button></th>
               <th><button className="th-button" onClick={() => sortBy("transporterName")}>Name{sortLabel("transporterName")}</button></th>
@@ -258,6 +307,9 @@ export function PttApplicationsTable({
           <tbody>
             {visible.map((row) => (
               <tr key={row.id}>
+                {canBulkDelete ? (
+                  <td className="selection-cell"><input aria-label={`Select ${previewLabel(row)}`} checked={selectedIds.has(row.id)} type="checkbox" onChange={(event) => toggleRow(row.id, event.target.checked)} /></td>
+                ) : null}
                 <td>{displayText(row.dateIssued)}</td>
                 <td><div className="cell-stack"><span>{displayText(row.pttNumber)}</span>{row.pttNumberDuplicate ? <span className="badge danger-badge">Duplicate</span> : null}</div></td>
                 <td><Link href={`/ptt/applications/${row.id}`}>{displayName(row.transporterName)}</Link></td>
@@ -284,7 +336,7 @@ export function PttApplicationsTable({
                 <td><div className="actions compact-actions"><Link className="button secondary" href={`/ptt/applications/${row.id}`}>View</Link><button className="button secondary" type="button" onClick={() => openEdit(row)}>Edit</button><button className="button danger" type="button" onClick={() => setDeleting(row)}>Delete</button></div></td>
               </tr>
             ))}
-            {visible.length === 0 ? <tr><td colSpan={24}>No PTT records found.</td></tr> : null}
+            {visible.length === 0 ? <tr><td colSpan={tableColSpan}>No PTT records found.</td></tr> : null}
           </tbody>
         </table>
       </div>
@@ -304,7 +356,7 @@ export function PttApplicationsTable({
             <h2>Edit PTT Application</h2>
             <form ref={formRef} action={updatePttApplicationRecordAction} className="form" onSubmit={submitEdit}>
               <input type="hidden" name="id" value={editing.id} />
-              <input type="hidden" name="returnTo" value={`/ptt/applications?version=${selectedVersionParam}`} />
+              <input type="hidden" name="returnTo" value={returnTo} />
               <div className="field"><label>Name</label><input name="transporterName" defaultValue={editing.transporterName} /></div>
               <PttRecordFields defaults={editing} officeChoices={officeChoices} transportTypes={transportTypes} validityRules={validityRules} versionOptions={versionOptions} checkerAccess={checkerAccess} onGeneratedFindingsChange={setFindings} />
               <div className="field"><label>Remarks</label><textarea name="remarks" value={manualRemarks} onChange={(event) => setManualRemarks(event.target.value)} rows={4} /></div>
@@ -318,6 +370,25 @@ export function PttApplicationsTable({
 
       {deleting ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal compact-modal"><h2>Delete PTT Application</h2><p>Delete <strong>{previewLabel(deleting)}</strong>? This removes the PTT application record.</p><form action={deletePttApplicationRecordAction} className="actions" onSubmit={() => setDeleting(null)}><input type="hidden" name="id" value={deleting.id} /><SubmitButton className="button danger" pendingText="Deleting...">Delete</SubmitButton><button className="button secondary" type="button" onClick={() => setDeleting(null)}>Cancel</button></form></div></div>
+      ) : null}
+
+      {bulkAssigning ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal compact-modal">
+            <h2>Assign PTT Version</h2>
+            <p>Assign <strong>{selectedRows.length}</strong> selected PTT application{selectedRows.length === 1 ? "" : "s"} to a Version.</p>
+            <form action={bulkAssignPttApplicationVersionAction} className="form" onSubmit={() => setBulkAssigning(false)}>
+              <div className="field"><label>Version</label><select name="versionId" value={bulkVersionId} onChange={(event) => setBulkVersionId(event.target.value)}>{activeAssignmentOptions.map((version) => <option key={version.id} value={version.id}>{version.name}</option>)}</select></div>
+              <input type="hidden" name="returnTo" value={returnTo} />
+              {selectedRows.map((row) => <input key={row.id} type="hidden" name="pttApplicationRecordIds" value={row.id} />)}
+              <div className="actions"><SubmitButton disabled={selectedRows.length === 0} pendingText="Assigning Version...">Assign Version</SubmitButton><button className="button secondary" type="button" onClick={() => setBulkAssigning(false)}>Cancel</button></div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {bulkDeleting ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal compact-modal"><h2>Delete Selected PTT Applications</h2><p>Delete <strong>{selectedRows.length}</strong> selected PTT application{selectedRows.length === 1 ? "" : "s"}? This removes the PTT application records.</p><ul className="compact-list bulk-preview-list">{selectedRows.slice(0, 8).map((row) => <li key={row.id}>{previewLabel(row)}</li>)}</ul>{selectedRows.length > 8 ? <p className="muted">And {selectedRows.length - 8} more.</p> : null}<form action={bulkDeletePttApplicationRecordsAction} className="actions" onSubmit={() => setBulkDeleting(false)}><input type="hidden" name="returnTo" value={returnTo} />{selectedRows.map((row) => <input key={row.id} type="hidden" name="pttApplicationRecordIds" value={row.id} />)}<SubmitButton className="button danger" disabled={selectedRows.length === 0} pendingText="Deleting selected...">Delete Selected</SubmitButton><button className="button secondary" type="button" onClick={() => setBulkDeleting(false)}>Cancel</button></form></div></div>
       ) : null}
     </>
   );

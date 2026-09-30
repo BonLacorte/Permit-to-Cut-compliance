@@ -19,6 +19,7 @@ const ptcNav = [
 ];
 
 const pttNav = [
+  ["Dashboard", routes.ptt.dashboard],
   ["Applications", routes.ptt.applications]
 ];
 

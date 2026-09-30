@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 
-export function DashboardRegionFilter({
+export function ProvincialOfficeFilter({
   options,
   path,
   selected,
@@ -17,10 +17,10 @@ export function DashboardRegionFilter({
 }) {
   const router = useRouter();
 
-  function changeRegion(region: string) {
+  function changeProvincialOffice(provincialOffice: string) {
     const params = new URLSearchParams();
     params.set("version", version);
-    if (region !== "All") params.set("region", region);
+    if (provincialOffice !== "All") params.set("provincialOffice", provincialOffice);
     for (const [key, value] of Object.entries(preservedParams)) {
       if (value) params.set(key, value);
     }
@@ -29,9 +29,9 @@ export function DashboardRegionFilter({
 
   return (
     <label className="compact-filter">
-      <span>Region</span>
-      <select value={selected} onChange={(event) => changeRegion(event.target.value)}>
-        {options.map((region) => <option key={region} value={region}>{region}</option>)}
+      <span>Provincial Office</span>
+      <select value={selected} onChange={(event) => changeProvincialOffice(event.target.value)}>
+        {options.map((provincialOffice) => <option key={provincialOffice} value={provincialOffice}>{provincialOffice}</option>)}
       </select>
     </label>
   );

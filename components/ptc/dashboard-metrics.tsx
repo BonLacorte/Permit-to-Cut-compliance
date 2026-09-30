@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { DashboardData } from "@/lib/dashboard";
+import Link from "next/link";
+import { dashboardApplicationsHref, type DashboardData } from "@/lib/dashboard";
 
 
 function money(value: number) {
@@ -28,7 +29,7 @@ function metricGridClass(count: number) {
   return count === 3 ? "grid cols-3" : "grid cols-4";
 }
 
-export function DashboardMetrics({ data }: { data: DashboardData }) {
+export function DashboardMetrics({ data, version }: { data: DashboardData; version: string }) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(() => new Set());
   const missingRows = data.topMissingByRegion.All || [];
   const applicationRows = data.topApplicationsByRegion.All || [];
@@ -49,30 +50,26 @@ export function DashboardMetrics({ data }: { data: DashboardData }) {
         return (
           <section key={row.id} className={metricGridClass(row.metrics.length)}>
             {row.metrics.map((metric) => (
-              <button
-                key={metric.id}
-                className={`card stat dashboard-stat-card ${expanded ? "expanded" : ""}`}
-                type="button"
-                aria-expanded={expanded}
-                onClick={() => toggleRow(row.id)}
-              >
-                <span>{metric.label}</span>
-                <div className="dashboard-stat-main">
-                  <strong>{metricValue(metric)}</strong>
-                  <em>{percent(metric.share)}</em>
-                </div>
+              <article key={metric.id} className={`card stat dashboard-stat-card ${expanded ? "expanded" : ""}`}>
+                <button className="dashboard-stat-toggle" type="button" aria-expanded={expanded} onClick={() => toggleRow(row.id)}>
+                  <span>{metric.label}</span>
+                  <div className="dashboard-stat-main">
+                    <strong>{metricValue(metric)}</strong>
+                    <em>{percent(metric.share)}</em>
+                  </div>
+                </button>
                 {expanded ? (
                   <div className="dashboard-region-list">
                     {metric.regions.map((region) => (
-                      <div key={region.region} className="dashboard-region-row">
+                      <Link key={region.region} className="dashboard-region-row" href={dashboardApplicationsHref({ version, region: region.region, metric: metric.id })}>
                         <span>{region.region}</span>
                         <strong>{regionValue(region, metric.valueType)}</strong>
                         <em>{percent(region.share)}</em>
-                      </div>
+                      </Link>
                     ))}
                   </div>
                 ) : null}
-              </button>
+              </article>
             ))}
           </section>
         );
