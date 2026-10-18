@@ -17,6 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { calculatePtcFee, calculatePtcValidity, feeFinding, normalizePtcCalculationConfig, validityFinding } from "@/lib/ptc-checks";
 import { defaultRuleData, resolvedPtcCalculationRule } from "@/lib/ptc-calculation-rules";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
+import { explicitlyAssignedFeatures } from "@/lib/assignable-features";
 
 import { createRecordSchema, updateRecordSchema, progressSchema, createPttRecordSchema, updatePttRecordSchema, passwordSchema, isNextRedirectError, optionalString, nullableString, nullableInt, nullableDecimal, nullableBoolean, nullableLocExemption, nullablePttValidityBasis, nullablePttVehicleCapacityCategory, documentRequirementMode, nullableDate, nullableVersionId, ptcRecordData, buildPtcChecks, persistPtcChecks, calculationRuleData, pttRecordData, buildPttChecks, persistPttChecks, pttTransportCapacityData, pttValidityRuleData, safeReturnTo, masterDataReturnTo, withVersionParam, withToast, redirectWithToast, revalidateReports, revalidatePttApplications, calculationConfigFromFormData } from "./_shared";
 
@@ -112,7 +113,7 @@ export async function updateUserFeatureAccessAction(formData: FormData) {
   ];
 
   await prisma.$transaction(async (tx) => {
-    await tx.userFeatureAccess.deleteMany({ where: { userId, feature: { not: FeatureKey.IMPORT_CHECKER } } });
+    await tx.userFeatureAccess.deleteMany({ where: { userId, feature: { notIn: explicitlyAssignedFeatures } } });
     if (features.length > 0) await tx.userFeatureAccess.createMany({ data: features.map((feature) => ({ userId, feature })) });
     await tx.activityLog.create({
       data: { userId: superadmin.id, action: "UPDATE_FEATURE_ACCESS", targetType: "user", targetId: userId, metadata: { features } }
@@ -149,5 +150,27 @@ export async function updateImportCheckerAccessAction(formData: FormData) {
   revalidatePath("/admin/users");
   revalidatePath("/admin/master-data");
   redirectWithToast("/admin/users", "success", "Import Checker setting updated.");
+}
+
+export async function updateDuplicateManagementAccessAction(formData: FormData) {
+  const actor = await requireSuperadmin();
+  const userId = String(formData.get("userId") || "");
+  const target = userId ? await prisma.user.findUnique({ where: { id: userId } }) : null;
+  if (!target || (target.role !== Role.ADMIN && target.role !== Role.SUPERADMIN)) {
+    redirectWithToast("/admin/users", "error", "Duplicate Management is available only to Admin and Superadmin accounts.");
+  }
+  const enabled = formData.get("duplicateManagement") === "on";
+  await prisma.$transaction(async (tx) => {
+    if (enabled) await tx.userFeatureAccess.upsert({
+      where: { userId_feature: { userId, feature: FeatureKey.DUPLICATE_MANAGEMENT } },
+      create: { userId, feature: FeatureKey.DUPLICATE_MANAGEMENT }, update: {}
+    });
+    else await tx.userFeatureAccess.deleteMany({ where: { userId, feature: FeatureKey.DUPLICATE_MANAGEMENT } });
+    await tx.activityLog.create({ data: { userId: actor.id, action: "UPDATE_DUPLICATE_MANAGEMENT_ACCESS", targetType: "user", targetId: userId, metadata: { enabled } } });
+  });
+  revalidatePath("/admin/users");
+  revalidatePath("/ptc/applications", "layout");
+  revalidatePath("/ptt/applications", "layout");
+  redirectWithToast("/admin/users", "success", "Duplicate Management setting updated.");
 }
 

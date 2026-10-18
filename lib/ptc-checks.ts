@@ -131,6 +131,8 @@ function remarkBlocks(value: string | null | undefined) {
 function isSystemGeneratedRemark(block: string) {
   const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
   return lines.length > 0 && lines.every((line) =>
+    /^Auto Check not run: (PTC|PTT) (Fee|Validity|Vehicle)\./.test(line)
+    ||
     /^There's no signature in (Recommending Approval|Approved|Validated\/Inspected By|Issued By) field\.$/.test(line)
     || /^The signature in (Recommending Approval|Approved|Validated\/Inspected By|Issued By) field was signed ['‘]For['’] by .+ on behalf of the authorized signatory\.$/.test(line)
     || /^There's no date in Date (Issued|Validated\/Inspected) field\.$/.test(line)

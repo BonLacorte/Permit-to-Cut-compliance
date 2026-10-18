@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { deleteUserAction, resetUserPasswordAction, updateImportCheckerAccessAction, updateUserFeatureAccessAction } from "@/app/actions";
+import { deleteUserAction, resetUserPasswordAction, updateDuplicateManagementAccessAction, updateImportCheckerAccessAction, updateUserFeatureAccessAction } from "@/app/actions";
 import { SubmitButton } from "@/components/ui/submit-button";
 
 type UserRow = {
@@ -31,6 +31,14 @@ export function UsersTable({ users, currentUserId }: { users: UserRow[]; current
                   <td>{user.email}</td>
                   <td>{user.role}</td>
                   <td>
+                    {user.role === "ADMIN" || user.role === "SUPERADMIN" ? (
+                      <form action={updateDuplicateManagementAccessAction} className="inline-edit-form">
+                        <input type="hidden" name="userId" value={user.id} />
+                        <label className="checkbox-row"><input name="duplicateManagement" type="checkbox" defaultChecked={user.features.includes("DUPLICATE_MANAGEMENT")} />Duplicate Management (PTC &amp; PTT)</label>
+                        <span className="muted">Compare, selectively merge, and delete duplicates across all Versions. Off by default, including for Superadmin.</span>
+                        <SubmitButton className="button secondary" pendingText="Saving...">Save Duplicate Management</SubmitButton>
+                      </form>
+                    ) : null}
                     {user.role === "SUPERADMIN" ? <span className="badge ok">All PTC/PTT calculation checkers</span> : null}
                     {user.role === "ADMIN" || user.role === "SUPERADMIN" ? (
                       <form action={updateImportCheckerAccessAction} className="inline-edit-form">

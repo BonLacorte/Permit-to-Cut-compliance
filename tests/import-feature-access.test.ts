@@ -10,6 +10,18 @@ import { getUserFeatureKeys, userHasFeature } from "@/lib/auth";
 beforeEach(() => { vi.clearAllMocks(); db.count.mockResolvedValue(0); db.findMany.mockResolvedValue([]); });
 
 describe("assignable Import Checker", () => {
+  it.each([Role.ADMIN, Role.SUPERADMIN])("requires explicit Duplicate Management assignment for %s", async (role) => {
+    const user = { id: "user", role };
+    expect(await userHasFeature(user, FeatureKey.DUPLICATE_MANAGEMENT)).toBe(false);
+    db.count.mockResolvedValue(1);
+    expect(await userHasFeature(user, FeatureKey.DUPLICATE_MANAGEMENT)).toBe(true);
+    expect((await getUserFeatureKeys(user.id, role)).has(FeatureKey.DUPLICATE_MANAGEMENT)).toBe(false);
+  });
+  it("denies Duplicate Management to Staff despite an assignment", async () => {
+    db.count.mockResolvedValue(1); db.findMany.mockResolvedValue([{ feature: FeatureKey.DUPLICATE_MANAGEMENT }]);
+    expect(await userHasFeature({ id: "staff", role: Role.STAFF }, FeatureKey.DUPLICATE_MANAGEMENT)).toBe(false);
+    expect((await getUserFeatureKeys("staff", Role.STAFF)).has(FeatureKey.DUPLICATE_MANAGEMENT)).toBe(false);
+  });
   it.each([Role.ADMIN, Role.SUPERADMIN])("is off by default and requires an explicit assignment for %s", async (role) => {
     const user = { id: "user-1", role };
     expect(await userHasFeature(user, FeatureKey.IMPORT_CHECKER)).toBe(false);
@@ -20,7 +32,7 @@ describe("assignable Import Checker", () => {
 
   it("preserves automatic Superadmin access to the other checkers", async () => {
     const user = { id: "super", role: Role.SUPERADMIN };
-    for (const feature of Object.values(FeatureKey).filter((key) => key !== FeatureKey.IMPORT_CHECKER)) {
+    for (const feature of Object.values(FeatureKey).filter((key) => key !== FeatureKey.IMPORT_CHECKER && key !== FeatureKey.DUPLICATE_MANAGEMENT)) {
       expect(await userHasFeature(user, feature)).toBe(true);
     }
     expect(db.count).not.toHaveBeenCalled();

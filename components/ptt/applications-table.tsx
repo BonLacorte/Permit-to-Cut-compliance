@@ -102,7 +102,8 @@ export function PttApplicationsTable({
   versionOptions,
   selectedVersionParam,
   returnTo,
-  canBulkDelete = false
+  canBulkDelete = false,
+  canManageDuplicates = false
 }: {
   checkerAccess: { fees: boolean; validity: boolean; vehicle: boolean };
   rows: Row[];
@@ -113,6 +114,7 @@ export function PttApplicationsTable({
   selectedVersionParam: string;
   returnTo: string;
   canBulkDelete?: boolean;
+  canManageDuplicates?: boolean;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [query, setQuery] = useState("");
@@ -311,7 +313,7 @@ export function PttApplicationsTable({
                   <td className="selection-cell"><input aria-label={`Select ${previewLabel(row)}`} checked={selectedIds.has(row.id)} type="checkbox" onChange={(event) => toggleRow(row.id, event.target.checked)} /></td>
                 ) : null}
                 <td>{displayText(row.dateIssued)}</td>
-                <td><div className="cell-stack"><span>{displayText(row.pttNumber)}</span>{row.pttNumberDuplicate ? <span className="badge danger-badge">Duplicate</span> : null}</div></td>
+                <td><div className="cell-stack"><span>{displayText(row.pttNumber)}</span>{row.pttNumberDuplicate ? <><span className="badge danger-badge" title="Matching PTT number exists across all Versions">Duplicate</span>{canManageDuplicates && <Link href={`/ptt/applications/duplicates?number=${encodeURIComponent(row.pttNumber)}`}>Compare duplicates</Link>}</> : null}</div></td>
                 <td><Link href={`/ptt/applications/${row.id}`}>{displayName(row.transporterName)}</Link></td>
                 <td>{displayText(row.regionalOffice)}</td>
                 <td>{displayText(row.provincialOffice)}</td>

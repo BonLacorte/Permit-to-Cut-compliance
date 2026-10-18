@@ -46,6 +46,16 @@ npm run dev
 
 Change these credentials after first login in a real deployment.
 
+## Duplicate review and selective merge
+
+PTC/PTT duplicate badges, dashboard counts, and export flags match permit numbers across **all** Versions, including archived and Uncategorized records, before applying list filters. Matching ignores case and surrounding/repeated whitespace, but preserves punctuation and leading zeros. Blank numbers never match.
+
+Superadmin can explicitly enable **Duplicate Management (PTC & PTT)** in Accounts & Access for Admin/Superadmin accounts, including their own. It is off by default. Staff can see duplicate flags but cannot compare or merge.
+
+From Applications, open **Duplicate Review** or **Compare duplicates**. Select a retained record, explicitly select records to delete, and optionally copy individual fields from those deletions. Only one donor is allowed per field. Selected blank values clear fields; Manual Remarks append without repeating identical blocks. PTC Type and submitted documents/progress are never transferred. The retained Version and creation metadata stay unchanged.
+
+Generate the server preview, review resulting values and unavailable checks, then confirm the merge. Checkers run automatically using retained-Version rules, even for archived Versions. Missing inputs clear unavailable calculated values and save recognizable not-checked remarks/metadata. Any relevant record, history, or rule change invalidates the preview. A serializable transaction refreshes the retained record and check history, stores durable snapshots in `activity_log` (`MERGE_DUPLICATE_RECORDS`), and deletes only selected duplicates. Snapshots survive deletion; no restore screen is provided.
+
 ## Verification Commands
 
 ```powershell

@@ -37,9 +37,10 @@ export default async function ApplicationsPage({ searchParams }: { searchParams?
     getOfficeChoices()
   ]);
   const regionOptions = dashboardRegionOptions(selectedReport.audits);
-  const [fees, validity] = await Promise.all([
+  const [fees, validity, canManageDuplicates] = await Promise.all([
     userHasFeature(user, FeatureKey.PTC_FEES_CHECKER),
-    userHasFeature(user, FeatureKey.PTC_VALIDITY_CHECKER)
+    userHasFeature(user, FeatureKey.PTC_VALIDITY_CHECKER),
+    userHasFeature(user, FeatureKey.DUPLICATE_MANAGEMENT)
   ]);
   const requestedRegion = firstQueryValue(searchParams?.region) || "All";
   const selectedRegion = regionOptions.includes(requestedRegion) ? requestedRegion : "All";
@@ -130,11 +131,13 @@ export default async function ApplicationsPage({ searchParams }: { searchParams?
           <DashboardMetricFilter version={versionContext.selectedVersionParam} region={selectedRegion} provincialOffice={selectedProvincialOffice} selected={selectedMetric} />
           <VersionFilter path="/ptc/applications" selected={versionContext.selectedVersionParam} options={versionContext.options} preservedParams={{ region: selectedRegion === "All" ? undefined : selectedRegion, provincialOffice: selectedProvincialOffice === "All" ? undefined : selectedProvincialOffice, metric: selectedMetric === "total" ? undefined : selectedMetric }} />
           <Link className="button" href={`/ptc/applications/new?version=${versionContext.selectedVersionParam}`}>New Application</Link>
+          {canManageDuplicates && <Link className="button secondary" href="/ptc/applications/duplicates">Duplicate Review</Link>}
         </div>
       </div>
       <section className="panel">
         <ApplicationsTable
           rows={rows}
+          canManageDuplicates={canManageDuplicates}
           allVersionRecordCount={allVersionsReport.completion.total}
           canBulkDelete={user.role === Role.ADMIN || user.role === Role.SUPERADMIN}
           checkerAccess={{ fees, validity }}
