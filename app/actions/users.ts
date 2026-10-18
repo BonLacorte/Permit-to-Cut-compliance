@@ -112,7 +112,7 @@ export async function updateUserFeatureAccessAction(formData: FormData) {
   ];
 
   await prisma.$transaction(async (tx) => {
-    await tx.userFeatureAccess.deleteMany({ where: { userId } });
+    await tx.userFeatureAccess.deleteMany({ where: { userId, feature: { not: FeatureKey.IMPORT_CHECKER } } });
     if (features.length > 0) await tx.userFeatureAccess.createMany({ data: features.map((feature) => ({ userId, feature })) });
     await tx.activityLog.create({
       data: { userId: superadmin.id, action: "UPDATE_FEATURE_ACCESS", targetType: "user", targetId: userId, metadata: { features } }
@@ -121,5 +121,33 @@ export async function updateUserFeatureAccessAction(formData: FormData) {
 
   revalidatePath("/admin/users");
   redirectWithToast("/admin/users", "success", "Feature access updated.");
+}
+
+export async function updateImportCheckerAccessAction(formData: FormData) {
+  const superadmin = await requireSuperadmin();
+  const userId = String(formData.get("userId") || "");
+  if (!userId) redirectWithToast("/admin/users", "error", "User id is required.");
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target || (target.role !== Role.ADMIN && target.role !== Role.SUPERADMIN)) {
+    redirectWithToast("/admin/users", "error", "Import Checker can only be assigned to Admin or Superadmin accounts.");
+  }
+  const enabled = formData.get("importChecker") === "on";
+  await prisma.$transaction(async (tx) => {
+    if (enabled) {
+      await tx.userFeatureAccess.upsert({
+        where: { userId_feature: { userId, feature: FeatureKey.IMPORT_CHECKER } },
+        create: { userId, feature: FeatureKey.IMPORT_CHECKER },
+        update: {}
+      });
+    } else {
+      await tx.userFeatureAccess.deleteMany({ where: { userId, feature: FeatureKey.IMPORT_CHECKER } });
+    }
+    await tx.activityLog.create({
+      data: { userId: superadmin.id, action: "UPDATE_IMPORT_CHECKER_ACCESS", targetType: "user", targetId: userId, metadata: { enabled } }
+    });
+  });
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/master-data");
+  redirectWithToast("/admin/users", "success", "Import Checker setting updated.");
 }
 

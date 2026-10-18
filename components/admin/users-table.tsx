@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { deleteUserAction, resetUserPasswordAction, updateUserFeatureAccessAction } from "@/app/actions";
+import { deleteUserAction, resetUserPasswordAction, updateImportCheckerAccessAction, updateUserFeatureAccessAction } from "@/app/actions";
 import { SubmitButton } from "@/components/ui/submit-button";
 
 type UserRow = {
@@ -31,7 +31,15 @@ export function UsersTable({ users, currentUserId }: { users: UserRow[]; current
                   <td>{user.email}</td>
                   <td>{user.role}</td>
                   <td>
-                    {user.role === "SUPERADMIN" ? <span className="badge ok">All checker features</span> : null}
+                    {user.role === "SUPERADMIN" ? <span className="badge ok">All PTC/PTT calculation checkers</span> : null}
+                    {user.role === "ADMIN" || user.role === "SUPERADMIN" ? (
+                      <form action={updateImportCheckerAccessAction} className="inline-edit-form">
+                        <input type="hidden" name="userId" value={user.id} />
+                        <label className="checkbox-row"><input name="importChecker" type="checkbox" defaultChecked={user.features.includes("IMPORT_CHECKER")} />Import Checker (PTC &amp; PTT)</label>
+                        <span className="muted">Off: import directly. On: check files before import, with confirmed Import Anyway available.</span>
+                        <SubmitButton className="button secondary" pendingText="Saving...">Save Import Checker</SubmitButton>
+                      </form>
+                    ) : null}
                     {user.role === "ADMIN" || user.role === "STAFF" ? (
                       <form action={updateUserFeatureAccessAction} className="inline-edit-form">
                         <input type="hidden" name="userId" value={user.id} />

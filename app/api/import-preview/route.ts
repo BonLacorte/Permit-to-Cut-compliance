@@ -1,6 +1,6 @@
-import { Role } from "@prisma/client";
+import { FeatureKey, Role } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, userHasFeature } from "@/lib/auth";
 import { checkPtcImportWorkbook, checkPttImportWorkbook, type ImportGroup, type ImportPreviewResult } from "@/lib/import-checker";
 import { ptcImportCheckContext, pttImportCheckContext } from "@/lib/import-checker-context";
 import { UNCATEGORIZED_VERSION } from "@/lib/versioning";
@@ -26,6 +26,9 @@ export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user || (user.role !== Role.ADMIN && user.role !== Role.SUPERADMIN)) {
     return NextResponse.json({ error: "Admin access is required." }, { status: 403 });
+  }
+  if (!(await userHasFeature(user, FeatureKey.IMPORT_CHECKER))) {
+    return NextResponse.json({ error: "Import Checker is off for your account. Refresh the import page to import directly." }, { status: 403 });
   }
 
   let formData: FormData;

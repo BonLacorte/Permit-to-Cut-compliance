@@ -23,6 +23,7 @@ import { createRecordSchema, updateRecordSchema, progressSchema, createPttRecord
 
 export async function importPtcRecordsAction(formData: FormData) {
   const user = await requireAdmin();
+  const checkerEnabled = await userHasFeature(user, FeatureKey.IMPORT_CHECKER);
   const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=imports");
   const file = formData.get("file");
   const selectedVersionId = nullableVersionId(formData.get("versionId"));
@@ -40,13 +41,15 @@ export async function importPtcRecordsAction(formData: FormData) {
   let importedDespiteErrors = false;
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
-    const preview = checkPtcImportWorkbook(buffer, await ptcImportCheckContext(selectedVersionId));
-    checkerErrorCount = preview.errorCount;
-    checkerWarningCount = preview.warningCount;
-    importedDespiteErrors = forceImport && preview.errorCount > 0;
-    if (preview.rowsChecked === 0) redirectWithToast(returnTo, "error", "No PTC rows were found to import.");
-    if (!canImportPreview(preview, { forceImport })) {
-      redirectWithToast(returnTo, "error", `Import checker found ${preview.errorCount} blocking error${preview.errorCount === 1 ? "" : "s"}. Fix the Excel file and check it again.`);
+    if (checkerEnabled) {
+      const preview = checkPtcImportWorkbook(buffer, await ptcImportCheckContext(selectedVersionId));
+      checkerErrorCount = preview.errorCount;
+      checkerWarningCount = preview.warningCount;
+      importedDespiteErrors = forceImport && preview.errorCount > 0;
+      if (preview.rowsChecked === 0) redirectWithToast(returnTo, "error", "No PTC rows were found to import.");
+      if (!canImportPreview(preview, { forceImport })) {
+        redirectWithToast(returnTo, "error", `Import checker found ${preview.errorCount} blocking error${preview.errorCount === 1 ? "" : "s"}. Fix the Excel file and check it again.`);
+      }
     }
     parsed = parsePtcRecordsWorkbook(buffer);
   } catch (error) {
@@ -108,6 +111,7 @@ export async function importPtcRecordsAction(formData: FormData) {
 
 export async function importPttRecordsAction(formData: FormData) {
   const user = await requireAdmin();
+  const checkerEnabled = await userHasFeature(user, FeatureKey.IMPORT_CHECKER);
   const returnTo = masterDataReturnTo(formData, "/admin/master-data?tab=imports");
   const file = formData.get("file");
   const selectedVersionId = nullableVersionId(formData.get("versionId"));
@@ -126,13 +130,15 @@ export async function importPttRecordsAction(formData: FormData) {
   let importedDespiteErrors = false;
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
-    const preview = checkPttImportWorkbook(buffer, await pttImportCheckContext(selectedVersionId));
-    checkerErrorCount = preview.errorCount;
-    checkerWarningCount = preview.warningCount;
-    importedDespiteErrors = forceImport && preview.errorCount > 0;
-    if (preview.rowsChecked === 0) redirectWithToast(returnTo, "error", "No PTT rows were found to import.");
-    if (!canImportPreview(preview, { forceImport, requiredSelectionPresent: Boolean(selectedVersionId) })) {
-      redirectWithToast(returnTo, "error", `Import checker found ${preview.errorCount} blocking error${preview.errorCount === 1 ? "" : "s"}. Fix the Excel file and check it again.`);
+    if (checkerEnabled) {
+      const preview = checkPttImportWorkbook(buffer, await pttImportCheckContext(selectedVersionId));
+      checkerErrorCount = preview.errorCount;
+      checkerWarningCount = preview.warningCount;
+      importedDespiteErrors = forceImport && preview.errorCount > 0;
+      if (preview.rowsChecked === 0) redirectWithToast(returnTo, "error", "No PTT rows were found to import.");
+      if (!canImportPreview(preview, { forceImport, requiredSelectionPresent: Boolean(selectedVersionId) })) {
+        redirectWithToast(returnTo, "error", `Import checker found ${preview.errorCount} blocking error${preview.errorCount === 1 ? "" : "s"}. Fix the Excel file and check it again.`);
+      }
     }
     parsed = parsePttRecordsWorkbook(buffer);
   } catch (error) {
