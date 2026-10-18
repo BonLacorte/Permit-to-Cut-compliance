@@ -48,7 +48,10 @@ async function loadGroup(tx: Prisma.TransactionClient, group: PermitGroup, numbe
   return records;
 }
 function manualRecord(record: MergeRecord & { checkFindings: Array<{ message: string }> }): MergeRecord {
-  return { ...record, remarks: replaceGeneratedRemarks(String(record.remarks || ""), record.checkFindings.map((finding) => finding.message), []) };
+  const oldLines = record.checkFindings.flatMap((finding) => finding.message.split(/\r?\n/));
+  // Imported/legacy remarks may put manual and checker text on adjacent lines, not separate blocks.
+  const manualLines = String(record.remarks || "").split(/\r?\n/).filter((line) => !line.trim() || replaceGeneratedRemarks(line, oldLines, []).length > 0);
+  return { ...record, remarks: replaceGeneratedRemarks(manualLines.join("\n"), record.checkFindings.map((finding) => finding.message), []) };
 }
 export function displayMergeRecord(record: MergeRecord): MergeRecord {
   const { checkRuns: _runs, checkFindings: _findings, progressEntries: _progress, ...display } = record;

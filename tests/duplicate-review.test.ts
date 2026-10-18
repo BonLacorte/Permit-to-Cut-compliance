@@ -80,4 +80,13 @@ describe("duplicate merge server enforcement", () => {
     expect(previewFingerprint({ a: 1, b: [2] })).toBe(previewFingerprint({ b: [2], a: 1 }));
     expect(previewFingerprint({ a: 1, b: [2] })).not.toBe(previewFingerprint({ a: 1, b: [3] }));
   });
+  it.each(["PTC", "PTT"] as const)("removes legacy %s checker text adjacent to manual remarks before transferring", async (group) => {
+    const { db, selection, records } = fixture(group);
+    records[0].remarks = "Keep handwritten note\nThere's no signature in Approved field.";
+    records[1].remarks = "Donor handwritten note\nThere's no signature in Approved field.\nAuto Check not run: PTC Fee. Missing inputs.";
+    const preview = await buildMergePreview(db, selection);
+    expect(preview.selected.data.remarks).toBe("Keep handwritten note\n\nDonor handwritten note");
+    expect(preview.final.remarks).not.toContain("There's no signature in Approved field.");
+    expect(preview.final.remarks).not.toContain("Auto Check not run: PTC Fee.");
+  });
 });
