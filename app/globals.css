@@ -1347,6 +1347,7 @@ tbody tr:hover {
 .duplicate-comparison .merge-result { background: #eaf6f2; }
 .merge-cell { display: grid; gap: 12px; }
 .merge-result small { display: block; margin-top: 8px; }
+.display-only-label { display: block; margin-top: 8px; color: var(--muted); font-weight: normal; }
 .merge-dialog { width: min(900px, 92vw); max-height: 85vh; overflow: auto; border: 1px solid #cbd5e1; margin: auto; }
 .merge-dialog::backdrop { background: rgb(10 25 45 / 55%); }
 .duplicate-review input[type="checkbox"], .duplicate-review input[type="radio"] { width: auto; }

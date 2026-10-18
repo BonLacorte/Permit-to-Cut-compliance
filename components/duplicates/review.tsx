@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { previewDuplicateMergeAction, mergeDuplicateRecordsAction } from "@/app/actions/duplicates";
 import { duplicateMergeFields, selectMergedRecord, type MergeRecord, type MergeSelection } from "@/lib/duplicate-merge";
 import { type PermitGroup } from "@/lib/duplicate-numbers";
 import { formatAuditTimestamp } from "@/lib/ptc";
+import { PtcContextRows, type PtcContextRecord } from "@/components/duplicates/ptc-context-rows";
 
-export type ComparisonRecord = MergeRecord & { version?: { name: string; active: boolean } | null; createdBy?: { name: string }; editedBy?: { name: string } | null; outsideRegionAllowedDays?: number[] };
+export type ComparisonRecord = MergeRecord & PtcContextRecord & { version?: { name: string; active: boolean } | null; createdBy?: { name: string }; editedBy?: { name: string } | null; outsideRegionAllowedDays?: number[] };
 function valueText(value: unknown): string {
   if (value == null || value === "") return "Blank";
   if (typeof value === "boolean") return value ? "Yes" : "No";
@@ -74,18 +75,14 @@ export function DuplicateComparison({ group, records }: { group: PermitGroup; re
     { label: "Version", read: (record: ComparisonRecord) => record.version ? `${record.version.name}${record.version.active ? "" : " (archived)"}` : "Uncategorized" },
     { label: "Status (read-only)", read: (record: ComparisonRecord) => valueText(record.status) },
     { label: "Created By / At", read: (record: ComparisonRecord) => `${record.createdBy?.name || "Blank"} / ${formatAuditTimestamp(record.createdAt as string)}` },
-    { label: "Edited By / At", read: (record: ComparisonRecord) => record.editedBy ? `${record.editedBy.name} / ${formatAuditTimestamp(record.updatedAt as string)}` : "Blank" },
-    ...(group === "PTC" ? [
-      { label: "Type of Application (not transferred)", read: (record: ComparisonRecord) => (record.applicationType as { name: string } | null)?.name || "Blank" },
-      { label: "Submitted Documents (not transferred)", read: (record: ComparisonRecord) => (record.progressDocuments as Array<{ requiredDocument: { name: string } }>).map((document) => document.requiredDocument.name).join(", ") || "Blank" }
-    ] : [])
+    { label: "Edited By / At", read: (record: ComparisonRecord) => record.editedBy ? `${record.editedBy.name} / ${formatAuditTimestamp(record.updatedAt as string)}` : "Blank" }
   ];
   return <div className="grid duplicate-review">
     <section className="panel"><h2>Choose what to keep</h2><p>Choose one retained record, then explicitly select duplicates to delete. Copy individual fields from selected deletions; only one donor is allowed per field. Unselected records remain unchanged.</p><p className="muted">Blank transfers clear the field. Manual Remarks are appended once. Version, permit identity, creation metadata, and {group === "PTC" ? "Type and document/progress history stay with the retained record." : "record identity are not transferred."}</p></section>
     {error && <p role="alert" className="warning-text">{error}</p>}
     <div className="table-wrap duplicate-comparison" tabIndex={0} role="region" aria-label="Side-by-side duplicate comparison">
       <table><caption>Duplicate {group} records — all Versions</caption><thead><tr><th scope="col">Field</th>{records.map((record, index) => <th scope="col" key={record.id}><span>Record {index + 1}</span><p>{label(record)}</p><label><input type="radio" name="retainedRecord" aria-label={`Keep record ${index + 1}`} checked={keeperId === record.id} disabled={busy} onChange={() => changeKeeper(record.id)} /> Keep this record</label><br /><label><input type="checkbox" aria-label={`Delete record ${index + 1}`} checked={deleteIds.includes(record.id)} disabled={!keeper || keeperId === record.id || busy} onChange={(event) => toggleDelete(record.id, event.target.checked)} /> Delete this duplicate</label></th>)}<th scope="col" className="merge-result">Final retained result{preview ? " (server checked)" : " (selection only)"}</th></tr></thead><tbody>
-        {readonlyRows.map((row) => <tr key={row.label}><th scope="row">{row.label}</th>{records.map((record) => <td key={record.id}>{row.read(record)}</td>)}<td className="merge-result">{keeper ? row.label === "Status (read-only)" && preview ? valueText(preview.final.status) : row.read(keeper) : "Choose a retained record"}</td></tr>)}
+        {readonlyRows.map((row) => <Fragment key={row.label}><tr><th scope="row">{row.label}</th>{records.map((record) => <td key={record.id}>{row.read(record)}</td>)}<td className="merge-result">{keeper ? row.label === "Status (read-only)" && preview ? valueText(preview.final.status) : row.read(keeper) : "Choose a retained record"}</td></tr>{group === "PTC" && row.label === "PTC Number" && <PtcContextRows records={records} keeperId={keeperId} />}</Fragment>)}
         {fields.map((field) => {
           const donor = transfers.find((transfer) => transfer.field === field.key);
           return <tr key={field.key}><th scope="row">{field.label}</th>{records.map((record, index) => <td key={record.id}><div className="merge-cell">{valueText(record[field.key])}{record.id !== keeperId && <label><input type="checkbox" aria-label={`Copy ${field.label} from record ${index + 1}`} checked={donor?.sourceId === record.id} disabled={busy || !deleteIds.includes(record.id) || Boolean(donor && donor.sourceId !== record.id)} onChange={(event) => toggleTransfer(field.key, record.id, event.target.checked)} /> Copy{record[field.key] == null || record[field.key] === "" ? " blank (clears field)" : ""}</label>}</div></td>)}<td className="merge-result">{final ? valueText(final[field.key]) : "—"}{donor && <small>From record {records.findIndex((record) => record.id === donor.sourceId) + 1}{field.key === "remarks" ? " (append)" : ""}</small>}</td></tr>;
