@@ -110,6 +110,7 @@ export function ApplicationsTable({
   returnTo,
   allVersionRecordCount,
   canBulkDelete = false,
+  canManageDuplicates = false,
   checkerAccess
 }: {
   rows: Row[];
@@ -120,6 +121,7 @@ export function ApplicationsTable({
   returnTo: string;
   allVersionRecordCount: number;
   canBulkDelete?: boolean;
+  canManageDuplicates?: boolean;
   checkerAccess: { fees: boolean; validity: boolean };
 }) {
   const [query, setQuery] = useState("");
@@ -330,7 +332,7 @@ export function ApplicationsTable({
                 <td>{displayText(row.dateIssued)}</td>
                 <td>{displayText(row.recordedValidityDisplay)}</td>
                 <td>{displayText(row.actualValidityDisplay)}</td>
-                <td><div className="cell-stack"><span>{displayText(row.ptcNumber)}</span>{row.ptcNumberDuplicate ? <span className="badge danger-badge">Duplicate</span> : null}</div></td>
+                <td><div className="cell-stack"><span>{displayText(row.ptcNumber)}</span>{row.ptcNumberDuplicate ? <><span className="badge danger-badge" title="Matching PTC number exists across all Versions">Duplicate</span>{canManageDuplicates && <Link href={`/ptc/applications/duplicates?number=${encodeURIComponent(row.ptcNumber)}`}>Compare duplicates</Link>}</> : null}</div></td>
                 <td><Link href={`/ptc/applications/${row.id}`}>{displayName(row.applicantName)}</Link></td>
                 <td><div className="cell-stack"><span>{row.versionName}</span>{row.needsVersionReview ? <span className="badge warning-badge">Needs Version Review</span> : null}</div></td>
                 <td>{displayText(row.regionalOfficeDisplay)}</td>

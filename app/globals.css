@@ -1337,3 +1337,16 @@ tbody tr:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+/* Duplicate review keeps source columns side-by-side without compressing form values. */
+.duplicate-comparison { overflow: auto; max-width: 100%; max-height: 75vh; }
+.duplicate-comparison table { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; }
+.duplicate-comparison td, .duplicate-comparison th { min-width: 250px; max-width: 320px; white-space: pre-wrap; overflow-wrap: anywhere; vertical-align: top; }
+.duplicate-comparison thead th { position: sticky; top: 0; background: #f4f8fb; z-index: 2; }
+.duplicate-comparison th:first-child { position: sticky; left: 0; background: #f4f8fb; min-width: 190px; z-index: 1; }
+.duplicate-comparison thead th:first-child { z-index: 3; }
+.duplicate-comparison .merge-result { background: #eaf6f2; }
+.merge-cell { display: grid; gap: 12px; }
+.merge-result small { display: block; margin-top: 8px; }
+.merge-dialog { width: min(900px, 92vw); max-height: 85vh; overflow: auto; border: 1px solid #cbd5e1; margin: auto; }
+.merge-dialog::backdrop { background: rgb(10 25 45 / 55%); }
+.duplicate-review input[type="checkbox"], .duplicate-review input[type="radio"] { width: auto; }

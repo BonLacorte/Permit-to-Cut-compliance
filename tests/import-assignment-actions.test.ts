@@ -8,7 +8,7 @@ vi.mock("@/lib/auth", () => ({ requireSuperadmin: mocks.requireSuperadmin }));
 vi.mock("@/lib/prisma", () => ({ prisma: { user: { findUnique: mocks.findUnique }, $transaction: mocks.transaction } }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 vi.mock("next/navigation", () => ({ redirect: (url: string) => { throw Object.assign(new Error(url), { digest: "NEXT_REDIRECT" }); } }));
-import { updateImportCheckerAccessAction, updateUserFeatureAccessAction } from "@/app/actions/users";
+import { updateDuplicateManagementAccessAction, updateImportCheckerAccessAction, updateUserFeatureAccessAction } from "@/app/actions/users";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -41,8 +41,24 @@ it("preserves Import Checker when saving the other checker features", async () =
   mocks.findUnique.mockResolvedValue({ id: "admin", role: Role.ADMIN });
   const form = new FormData(); form.set("userId", "admin"); form.set("ptcFeesChecker", "on");
   await expect(updateUserFeatureAccessAction(form)).rejects.toThrow("Feature+access+updated");
-  expect(mocks.deleteMany).toHaveBeenCalledWith({ where: { userId: "admin", feature: { not: FeatureKey.IMPORT_CHECKER } } });
+  expect(mocks.deleteMany).toHaveBeenCalledWith({ where: { userId: "admin", feature: { notIn: [FeatureKey.IMPORT_CHECKER, FeatureKey.DUPLICATE_MANAGEMENT] } } });
   expect(mocks.createMany).toHaveBeenCalledWith({ data: [{ userId: "admin", feature: FeatureKey.PTC_FEES_CHECKER }] });
+});
+
+it.each([Role.ADMIN, Role.SUPERADMIN])("assigns Duplicate Management to %s without replacing Import Checker or other features", async (role) => {
+  mocks.findUnique.mockResolvedValue({ id: "super", role });
+  const form = new FormData(); form.set("userId", "super"); form.set("duplicateManagement", "on");
+  await expect(updateDuplicateManagementAccessAction(form)).rejects.toThrow("Duplicate+Management");
+  expect(mocks.upsert).toHaveBeenCalledWith({ where: { userId_feature: { userId: "super", feature: FeatureKey.DUPLICATE_MANAGEMENT } }, create: { userId: "super", feature: FeatureKey.DUPLICATE_MANAGEMENT }, update: {} });
+  expect(mocks.deleteMany).not.toHaveBeenCalled();
+});
+it("disables only Duplicate Management and rejects Staff assignment", async () => {
+  const form = new FormData(); form.set("userId", "super");
+  await expect(updateDuplicateManagementAccessAction(form)).rejects.toThrow("Duplicate+Management");
+  expect(mocks.deleteMany).toHaveBeenCalledWith({ where: { userId: "super", feature: FeatureKey.DUPLICATE_MANAGEMENT } });
+  mocks.transaction.mockClear(); mocks.findUnique.mockResolvedValue({ id: "staff", role: Role.STAFF });
+  await expect(updateDuplicateManagementAccessAction(form)).rejects.toThrow("available+only+to");
+  expect(mocks.transaction).not.toHaveBeenCalled();
 });
 
 it("rejects assigning Import Checker to Staff", async () => {

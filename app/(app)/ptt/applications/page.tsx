@@ -20,14 +20,15 @@ function formNumberValue(value: unknown) {
 export default async function PttApplicationsPage({ searchParams }: { searchParams?: { version?: string; region?: string | string[]; provincialOffice?: string | string[]; metric?: string | string[] } }) {
   const user = await requireUser();
   const versionContext = await getVersionContext(searchParams?.version, PERMIT_GROUP_PTT);
-  const [records, officeChoices, transportTypes, validityRules, feesAccess, validityAccess, vehicleAccess] = await Promise.all([
+  const [records, officeChoices, transportTypes, validityRules, feesAccess, validityAccess, vehicleAccess, canManageDuplicates] = await Promise.all([
     getPttApplicationRecords({ versionId: versionContext.selectedVersionId }),
     getOfficeChoices(),
     getPttTransportTypes(),
     getPttValidityRules(),
     userHasFeature(user, FeatureKey.PTT_FEES_CHECKER),
     userHasFeature(user, FeatureKey.PTT_VALIDITY_CHECKER),
-    userHasFeature(user, FeatureKey.PTT_VEHICLE_CAPACITY_CHECKER)
+    userHasFeature(user, FeatureKey.PTT_VEHICLE_CAPACITY_CHECKER),
+    userHasFeature(user, FeatureKey.DUPLICATE_MANAGEMENT)
   ]);
 
   const requestedRegion = Array.isArray(searchParams?.region) ? searchParams?.region[0] : searchParams?.region || "All";
@@ -117,6 +118,7 @@ export default async function PttApplicationsPage({ searchParams }: { searchPara
           <VersionFilter path="/ptt/applications" selected={versionContext.selectedVersionParam} options={versionContext.options} preservedParams={{ region: selectedRegion === "All" ? undefined : selectedRegion, provincialOffice: selectedProvincialOffice === "All" ? undefined : selectedProvincialOffice, metric: selectedMetric === "total" ? undefined : selectedMetric }} />
           <Link className="button" href={`/ptt/applications/new?version=${versionContext.selectedVersionParam}`}>New PTT Application</Link>
           <Link className="button secondary" href={`/api/export?group=PTT&version=${versionContext.selectedVersionParam}`}>Export PTT Excel</Link>
+          {canManageDuplicates && <Link className="button secondary" href="/ptt/applications/duplicates">Duplicate Review</Link>}
         </div>
       </div>
 
@@ -124,6 +126,7 @@ export default async function PttApplicationsPage({ searchParams }: { searchPara
         <PttApplicationsTable
           checkerAccess={{ fees: feesAccess, validity: validityAccess, vehicle: vehicleAccess }}
           rows={rows}
+          canManageDuplicates={canManageDuplicates}
           officeChoices={officeChoices.map((office) => ({
             id: office.id,
             name: office.name,

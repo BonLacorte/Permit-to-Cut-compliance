@@ -3,6 +3,7 @@ import { mergeRemarks } from "@/lib/ptc-checks";
 import { PERMIT_GROUP_PTC } from "@/lib/ptc";
 import { auditRecords, applicationSummary, completionSummary, documentCombinations, documentSummary } from "@/lib/reporting";
 import type { VersionScopedOptions } from "@/lib/data/master-data";
+import { duplicateNumberSet, normalizePermitNumber } from "@/lib/duplicate-numbers";
 
 export async function getReportData(options: VersionScopedOptions = {}) {
   const group = options.group ?? PERMIT_GROUP_PTC;
@@ -33,12 +34,8 @@ export async function getReportData(options: VersionScopedOptions = {}) {
       orderBy: { createdAt: "desc" }
     })
   ]);
-  const duplicatePtcNumbers = new Set(Array.from(records.reduce((map, record) => {
-    const ptcNumber = String(record.ptcNumber || "").trim();
-    if (!ptcNumber) return map;
-    map.set(ptcNumber, (map.get(ptcNumber) || 0) + 1);
-    return map;
-  }, new Map<string, number>())).filter(([, count]) => count > 1).map(([ptcNumber]) => ptcNumber));
+  const allNumbers = versionId === undefined ? records : await prisma.applicationRecord.findMany({ where: { group }, select: { ptcNumber: true } });
+  const duplicatePtcNumbers = duplicateNumberSet(allNumbers.map((record) => record.ptcNumber));
   const requiredDocuments = documents.map((doc) => ({
     id: doc.id,
     name: doc.name,
@@ -86,7 +83,7 @@ export async function getReportData(options: VersionScopedOptions = {}) {
     approved: record.approved,
     approvedSignatureStatus: record.approvedSignatureStatus,
     approvedSignatureForName: record.approvedSignatureForName,
-    ptcNumberDuplicate: !!record.ptcNumber && duplicatePtcNumbers.has(record.ptcNumber)
+    ptcNumberDuplicate: duplicatePtcNumbers.has(normalizePermitNumber(record.ptcNumber))
   }));
   const audits = auditRecords(recordRefs, requiredDocuments);
   return {

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 import { FeatureKey, Role } from "@prisma/client";
+import { explicitlyAssignedFeatures } from "@/lib/assignable-features";
 
 const COOKIE_NAME = "grounds_session";
 
@@ -77,16 +78,16 @@ export async function getUserFeatureKeys(userId: string, role?: Role) {
   const rows = await prisma.userFeatureAccess.findMany({ where: { userId }, select: { feature: true } });
   if (role === Role.SUPERADMIN) {
     return new Set([
-      ...Object.values(FeatureKey).filter((feature) => feature !== FeatureKey.IMPORT_CHECKER),
+      ...Object.values(FeatureKey).filter((feature) => !explicitlyAssignedFeatures.includes(feature)),
       ...rows.map((row) => row.feature)
     ]);
   }
-  if (role === Role.STAFF) return new Set(rows.map((row) => row.feature).filter((feature) => feature !== FeatureKey.IMPORT_CHECKER));
+  if (role === Role.STAFF) return new Set(rows.map((row) => row.feature).filter((feature) => !explicitlyAssignedFeatures.includes(feature)));
   return new Set(rows.map((row) => row.feature));
 }
 
 export async function userHasFeature(user: { id: string; role: Role }, feature: FeatureKey) {
-  if (user.role === Role.SUPERADMIN && feature !== FeatureKey.IMPORT_CHECKER) return true;
+  if (user.role === Role.SUPERADMIN && !explicitlyAssignedFeatures.includes(feature)) return true;
   if (user.role !== Role.ADMIN && user.role !== Role.SUPERADMIN) return false;
   return (await prisma.userFeatureAccess.count({ where: { userId: user.id, feature } })) > 0;
 }
