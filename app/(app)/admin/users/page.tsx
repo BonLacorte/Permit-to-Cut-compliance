@@ -12,7 +12,7 @@ export default async function UsersPage() {
     <div className="grid">
       <div>
         <h1>Users</h1>
-          <p className="muted">Superadmin manages accounts and grants checker access to selected Admin accounts.</p>
+          <p className="muted">Superadmin manages accounts and checker access. Import Checker is assignable to Admin and Superadmin accounts and is off by default.</p>
       </div>
       <section className="panel">
         <form action={createUserAction} className="form">

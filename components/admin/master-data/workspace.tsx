@@ -48,14 +48,14 @@ import { PtcCalculationRulesManager } from "@/components/ptc/calculation-rules-m
 import { PttValidityRulesManager } from "@/components/ptt/validity-rules-manager";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { VersionFilter } from "@/components/ptc/version-filter";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, userHasFeature } from "@/lib/auth";
 import { getApplicationTypesWithDocuments, getDeactivatedMasterData, getOfficeChoices, getPttTransportTypes, getPttValidityRules, getVersionContext } from "@/lib/data";
 import { PERMIT_GROUP_PTT } from "@/lib/ptt";
 import { PTT_VEHICLE_CAPACITY_OPTIONS, pttCapacityCategoryLabel } from "@/lib/ptt-checks";
 import { prisma } from "@/lib/prisma";
 import { ruleConfig } from "@/lib/ptc-calculation-rules";
 import { pttValidityRuleConfig } from "@/lib/ptt-validity-rules";
-import { Role } from "@prisma/client";
+import { FeatureKey, Role } from "@prisma/client";
 
 type MasterDataTab = "general" | "ptc" | "ptt" | "imports" | "deactivated";
 
@@ -101,6 +101,7 @@ function RequirementModeSelect({ defaultValue = "Required", disabled = false }: 
 export default async function MasterDataPage({ searchParams }: { searchParams?: { version?: string; tab?: string } }) {
   const user = await requireAdmin();
   const activeTab = activeMasterDataTab(searchParams?.tab);
+  const importCheckerEnabled = activeTab === "imports" && await userHasFeature(user, FeatureKey.IMPORT_CHECKER);
   const versionContext = await getVersionContext(searchParams?.version);
   const pttVersionContext = await getVersionContext(null, PERMIT_GROUP_PTT);
   const selectedVersionId = versionContext.selectedVersionId;
@@ -678,9 +679,10 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
 
       <section className="grid cols-2">
         <ImportCheckerPanel
+          checkerEnabled={importCheckerEnabled}
           group="PTC"
           title="Import PTC Excel File"
-          description="Check Permit-to-Cut rows before importing them into the selected Version."
+          description="Import Permit-to-Cut rows into the selected Version."
           action={importPtcRecordsAction}
           returnTo={returnToImports}
           versionLabel="Import Version"
@@ -695,15 +697,16 @@ export default async function MasterDataPage({ searchParams }: { searchParams?: 
             <>
               <p><strong>Template columns:</strong></p>
               <p className="muted">Regional Office, Provincial Office, PTC Number, Date Issued, Name of Applicant, location details, tree counts, Type of Application, and LOC Exemption.</p>
-              <p className="muted">Download the template for exact column order. Rows import only after this checker finds no blocking errors; warnings stay visible for review.</p>
+              <p className="muted">Download the template for exact column order. PTC records can be imported into an active Version or Uncategorized.</p>
             </>
           )}
         />
 
         <ImportCheckerPanel
+          checkerEnabled={importCheckerEnabled}
           group="PTT"
           title="Import PTT Excel File"
-          description="Check Permit-to-Transport rows before importing them into the selected PTT Version."
+          description="Import Permit-to-Transport rows into the selected active PTT Version."
           action={importPttRecordsAction}
           returnTo={returnToImports}
           versionLabel="Import PTT Version"

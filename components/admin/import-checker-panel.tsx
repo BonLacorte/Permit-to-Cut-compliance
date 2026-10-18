@@ -11,6 +11,7 @@ type VersionOption = {
 };
 
 type ImportCheckerPanelProps = {
+  checkerEnabled: boolean;
   group: ImportGroup;
   title: string;
   description: string;
@@ -33,6 +34,7 @@ function severityClass(severity: string) {
 }
 
 export function ImportCheckerPanel({
+  checkerEnabled,
   group,
   title,
   description,
@@ -102,8 +104,8 @@ export function ImportCheckerPanel({
     window.setTimeout(() => formRef.current?.requestSubmit(), 0);
   }
 
-  const canImport = Boolean(preview && canImportPreview(preview));
-  const canForceImport = Boolean(preview && preview.errorCount > 0 && canImportPreview(preview, { forceImport: true }));
+  const canImport = !checkerEnabled || Boolean(preview && canImportPreview(preview));
+  const canForceImport = checkerEnabled && Boolean(preview && preview.errorCount > 0 && canImportPreview(preview, { forceImport: true }));
 
   return (
     <form action={action} ref={formRef} className="panel form import-checker-panel">
@@ -117,6 +119,9 @@ export function ImportCheckerPanel({
         {templateHref ? <a className="button secondary" href={templateHref}>{templateLabel}</a> : null}
       </div>
       <div className="instruction-box">{instruction}</div>
+      <p className="muted">{checkerEnabled
+        ? "Import Checker is on. Check File before importing; errors require a confirmed Import Anyway."
+        : "Import Checker is off. Select the destination and file, then import directly. Values are read in template column order; invalid typed values become blank."}</p>
       <div className="field">
         <label htmlFor={`${fileInputId}-version`}>{versionLabel}</label>
         <select id={`${fileInputId}-version`} name="versionId" defaultValue={defaultVersionId} onChange={resetPreview}>
@@ -128,15 +133,15 @@ export function ImportCheckerPanel({
         <input id={fileInputId} name="file" type="file" accept=".xlsx,.xls" required onChange={resetPreview} />
       </div>
       <div className="actions">
-        <button className="button secondary" type="button" onClick={checkFile} disabled={checking} aria-busy={checking}>
+        {checkerEnabled ? <button className="button secondary" type="button" onClick={checkFile} disabled={checking} aria-busy={checking}>
           {checking ? <span className="spinner" aria-hidden="true" /> : null}
           {checking ? "Checking file..." : "Check File"}
-        </button>
+        </button> : null}
         <SubmitButton pendingText={importingText} disabled={!canImport}>{importButtonText}</SubmitButton>
         {canForceImport ? <button className="button danger" type="button" onClick={() => setForceImportOpen(true)}>Import Anyway</button> : null}
       </div>
-      {checkError ? <p className="form-error">{checkError}</p> : null}
-      {preview ? (
+      {checkerEnabled && checkError ? <p className="form-error">{checkError}</p> : null}
+      {checkerEnabled && preview ? (
         <div className="import-preview">
           <div className="import-preview-summary">
             <div><span>Rows checked</span><strong>{preview.rowsChecked}</strong></div>
@@ -170,7 +175,7 @@ export function ImportCheckerPanel({
           ) : null}
         </div>
       ) : null}
-      {forceImportOpen && preview ? (
+      {checkerEnabled && forceImportOpen && preview ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby={`${fileInputId}-force-import-title`}>
           <div className="modal compact-modal">
             <h2 id={`${fileInputId}-force-import-title`}>Import {group} Despite Errors</h2>

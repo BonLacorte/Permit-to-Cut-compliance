@@ -74,14 +74,20 @@ export async function requireSuperadmin() {
 }
 
 export async function getUserFeatureKeys(userId: string, role?: Role) {
-  if (role === Role.SUPERADMIN) return new Set(Object.values(FeatureKey));
   const rows = await prisma.userFeatureAccess.findMany({ where: { userId }, select: { feature: true } });
+  if (role === Role.SUPERADMIN) {
+    return new Set([
+      ...Object.values(FeatureKey).filter((feature) => feature !== FeatureKey.IMPORT_CHECKER),
+      ...rows.map((row) => row.feature)
+    ]);
+  }
+  if (role === Role.STAFF) return new Set(rows.map((row) => row.feature).filter((feature) => feature !== FeatureKey.IMPORT_CHECKER));
   return new Set(rows.map((row) => row.feature));
 }
 
 export async function userHasFeature(user: { id: string; role: Role }, feature: FeatureKey) {
-  if (user.role === Role.SUPERADMIN) return true;
-  if (user.role !== Role.ADMIN) return false;
+  if (user.role === Role.SUPERADMIN && feature !== FeatureKey.IMPORT_CHECKER) return true;
+  if (user.role !== Role.ADMIN && user.role !== Role.SUPERADMIN) return false;
   return (await prisma.userFeatureAccess.count({ where: { userId: user.id, feature } })) > 0;
 }
 
